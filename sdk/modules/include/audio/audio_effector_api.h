@@ -81,10 +81,6 @@
 /** @name Packet length of command*/
 /** @{ */
 
-/*! \brief InitMFE command (#AUDCMD_INITMFE) packet length */
-
-#define  LENGTH_INITMFE             4
-
 /*! \brief StartBB command (#AUDCMD_STARTBB) packet length */
 
 #define  LENGTH_STARTBB             3
@@ -92,18 +88,6 @@
 /*! \brief StopBB command (#AUDCMD_STOPBB) packet length */
 
 #define  LENGTH_STOPBB              3
-
-/*! \brief InitMPP command (#AUDCMD_INITMPP) packet length */
-
-#define  LENGTH_INITMPP             5
-
-/*! \brief SetMPP command (#AUDCMD_SETMPPPARAM) packet length */
-
-#define  LENGTH_SUB_SETMPP_COMMON   4
-
-/*! \brief SetMPP command (#AUDCMD_SETMPPPARAM) packet length */
-
-#define  LENGTH_SUB_SETMPP_XLOUD    4
 
 /** @} */
 
@@ -124,11 +108,15 @@
 
 typedef enum
 {
-  /*! \brief I2S 2ch (__not supported__) */
+  /*! \brief I2S 2ch
+   *  \deprecated It will be removed in the future
+   */
 
   AS_OUTPUT_DEVICE_I2S2CH = 0x03,
 
-  /*! \brief SP/HP 2ch (__not supported__) */
+  /*! \brief SP/HP 2ch
+   *  \deprecated It will be removed in the future
+   */
 
   AS_OUTPUT_DEVICE_SP2CH = 0x30,
 
@@ -141,11 +129,15 @@ typedef enum
 
 typedef enum
 {
-  /*! \brief I2S 2ch (__not supported__) */
+  /*! \brief I2S 2ch
+   *  \deprecated It will be removed in the future
+   */
 
   AS_INPUT_DEVICE_I2S2CH = 0x0003,
 
-  /*! \brief Analog Mic 1ch (__not supported__) */
+  /*! \brief Analog Mic 1ch
+   *  \deprecated It will be removed in the future
+   */
 
   AS_INPUT_DEVICE_AMIC1CH = 0x0100,
 
@@ -153,7 +145,9 @@ typedef enum
 
   AS_INPUT_DEVICE_AMIC1CH_I2S2CH = (AS_INPUT_DEVICE_I2S2CH | AS_INPUT_DEVICE_AMIC1CH),
 
-  /*! \brief Analog Mic 4ch, I2S 2ch (__not supported__) */
+  /*! \brief Analog Mic 4ch, I2S 2ch
+   *  \deprecated It will be removed in the future
+   */
 
   AS_INPUT_DEVICE_AMIC4CH_I2S2CH = (AS_INPUT_DEVICE_I2S2CH | 0x0F00)
 } AsInputDevice;
@@ -235,7 +229,9 @@ typedef enum
 
   AS_DISABLE_ECHOCANCEL = 0,
 
-  /*! \brief EchoCancel ON (__not supported__) */
+  /*! \brief EchoCancel ON
+   *  \deprecated It will be removed in the future
+   */
 
   AS_ENABLE_ECHOCANCEL,
   AS_MFE_ENBL_ECHOCANCEL_NUM
@@ -337,7 +333,9 @@ typedef enum
 
   AS_SET_BBSTS_WITH_MPP_NONE = 0,
 
-  /*! \brief MPP active (__not supported__) */
+  /*! \brief MPP active
+   *  \deprecated It will be removed in the future
+   */
 
   AS_SET_BBSTS_WITH_MPP_ACTIVE,
   AS_SET_BBSTS_WITH_MPP_NUM
@@ -480,144 +478,6 @@ typedef struct
   uint8_t  reserved6;
 } StopBBParam;
 
-/** InitMPP Command (#AUDCMD_INITMPP) parameter */
-
-typedef struct
-{
-  /*! \brief [in] Select MPP output sampling rate
-   *
-   * Use #AsMppOutputFsId enum type
-   */
-
-  uint16_t  output_fs;
-
-  /*! \brief [in] Select MPP output channel numbers
-   *
-   * Use #AsMppOutputChNum enum type
-   */
-
-  uint8_t  output_channel_num;
-
-  /*! \brief [in] Select MPP mode
-   *
-   * Use #AsMppModeId enum type
-   */
-
-  uint8_t  mpp_mode;
-
-  /*! \brief [in] reserved */
-
-  uint8_t  reserved1;
-
-  /*! \brief [in] Select EAX mode
-   *
-   * Use #AsMppEaxModeId enum type
-   */
-
-  uint8_t  eax_mode;
-
-  /*! \brief [in] Select xLOUD mode
-   *
-   * Use #AsMppXloudModeId enum type
-   */
-
-  uint8_t  xloud_mode;
-
-  /*! \brief [in] Select MPP coefficient table
-   *
-   * Use #AsMppCoefModeId enum type
-   */
-
-  uint8_t  coef_mode;
-
-  /*! \brief [in] xLOUD coefficient table address */
-
-  uint32_t xloud_coef_table;
-
-  /*! \brief [in] EAX coefficient table address */
-
-  uint32_t eax_coef_table;
-
-} InitMPPParam;
-
-/** Sub Command: MPP common setting parameter
- *
- * Used by following Commmand:
- *  - Command Code: #AUDCMD_SETMPPPARAM, Sub code: #0x0
- */
-
-typedef struct
-{
-  /*! \brief [in] reserved */
-
-  uint32_t  reserved1;
-
-  /*! \brief [in] reserved */
-
-  uint32_t  reserved2;
-
-  /*! \brief [in] reserved */
-
-  uint32_t  reserved3;
-} MppCommonSet;
-
-/** Sub Command: MPP xLOUD setting parameter
- *
- * Used by following Commmand:
- *  - Command Code: #AUDCMD_SETMPPPARAM, Sub code: #0x1
- */
-
-typedef struct
-{
-  /*! \brief [in] set xLOUD volume (0-59) */
-
-  uint8_t  xloud_vol;
-
-  /*! \brief [in] reserved */
-
-  uint8_t  reserved1;
-
-  /*! \brief [in] reserved */
-
-  uint8_t  reserved2;
-
-  /*! \brief [in] reserved */
-
-  uint8_t  reserved3;
-
-  /*! \brief [in] reserved */
-
-  uint32_t reserved4;
-
-  /*! \brief [in] reserved */
-
-  uint32_t reserved5;
-} MppXloudSet;
-
-/** (__not supported__) SetMPPParam Command (#AUDCMD_SETMPPPARAM) parameter */
-
-#if defined(__CC_ARM)
-#pragma anon_unions
-#endif
-
-typedef struct
-{
-  union
-  {
-    /*! \brief [in] for Sub Code: 0x0 */
-
-    MppCommonSet  mpp_common_set;
-
-    /*! \brief [in] for Sub Code: 0x1 */
-
-    MppXloudSet  mpp_xloud_set;
-  };
-#if !defined(__CC_ARM)
-} SetMPPParam ;
-#else
-} SetMPPParam __attribute__((transparent_union));
-#endif
-
 /** SetBaseBandStatus Command (#AUDCMD_SETBASEBANDSTATUS) parameter */
 
 typedef struct
@@ -742,18 +602,25 @@ typedef struct
  * Public Function Prototypes
  ****************************************************************************/
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 /**
  * @brief Activate sound effector feature
  *
  * @param[in] param: Parameters of resources used by sound effector
+ * @param[in] attcb: Attention callback of Player. NULL means no callback.
  *
  * @retval     true  : success
  * @retval     false : failure
  */
+bool AS_CreateEffector(FAR AsCreateEffectorParam_t *param,
+                       AudioAttentionCb attcb);
+
+__attribute__((deprecated(
+                 "\n \
+                  \n Deprecated create API is used. \
+                  \n Use \"AS_CreateEffector(AsCreateEffectorParam_t * \
+                  \n                        AudioAttentionCb)\". \
+                  \n \
+                  \n")))
 bool AS_CreateEffector(FAR AsCreateEffectorParam_t *param);
 
 /**
@@ -763,10 +630,6 @@ bool AS_CreateEffector(FAR AsCreateEffectorParam_t *param);
  * @retval     false : failure
  */
 bool AS_DeleteEffector(void);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif  /* __SONY_APPS_INCLUDE_AUDIOUTIL_AUDIO_EFFECTOR_API_H */
 /**

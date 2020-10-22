@@ -37,7 +37,7 @@
  * Included Files
  ****************************************************************************/
 
-#include <sdk/config.h>
+#include <nuttx/config.h>
 #include <nuttx/compiler.h>
 
 #include <sys/types.h>
@@ -73,7 +73,7 @@
 #endif
 
 #ifndef MOUNTPT
-#  define MOUNTPT "/mnt/vfat/BIN"
+#  define MOUNTPT "/mnt/sd0/BIN"
 #endif
 
 /* MP object keys. Must be synchronized with worker. */
@@ -135,7 +135,7 @@ static int run_worker(const char *filename)
   ret = mptask_assign(&mptask);
   if (ret != 0)
     {
-      err("mptask_asign() failure. %d\n", ret);
+      err("mptask_assign() failure. %d\n", ret);
       return ret;
     }
 
@@ -154,7 +154,7 @@ static int run_worker(const char *filename)
       return ret;
     }
 
-  /* Initialize MP message queue with asigned CPU ID, and bind it to MP task */
+  /* Initialize MP message queue with assigned CPU ID, and bind it to MP task */
 
   ret = mpmq_init(&mq, KEY_MQ, mptask_getcpuid(&mptask));
   if (ret < 0)
@@ -264,11 +264,7 @@ static int run_worker(const char *filename)
  * Name: asmp_main
  ****************************************************************************/
 
-#ifdef CONFIG_BUILD_KERNEL
 int main(int argc, FAR char *argv[])
-#else
-int asmp_main(int argc, char *argv[])
-#endif
 {
 #ifdef CONFIG_FS_ROMFS
   int ret;

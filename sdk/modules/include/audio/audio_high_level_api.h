@@ -67,18 +67,20 @@
 #endif
 #ifdef CONFIG_AUDIOUTILS_RECORDER
 #  include "audio/audio_recorder_api.h"
+#  include "audio/audio_frontend_api.h"
 #  include "audio/audio_capture_api.h"
 #endif
-#if defined(CONFIG_AUDIOUTILS_VOICE_CALL) || defined(CONFIG_AUDIOUTILS_VOICE_COMMAND)
-#  include "audio/audio_effector_api.h"
-#  include "audio/audio_renderer_api.h"
-#  include "audio/audio_capture_api.h"
-#endif
-#ifdef CONFIG_AUDIOUTILS_VOICE_COMMAND
+#ifdef CONFIG_AUDIOUTILS_SOUND_RECOGNIZER
+#  include "audio/audio_frontend_api.h"
 #  include "audio/audio_recognizer_api.h"
-#  include "audio/audio_effector_api.h"
 #  include "audio/audio_renderer_api.h"
 #  include "audio/audio_capture_api.h"
+#endif
+#ifdef CONFIG_AUDIOUTILS_SYNTHESIZER
+#  include "audio/audio_player_api.h"
+#  include "audio/audio_synthesizer_api.h"
+#  include "audio/audio_outputmix_api.h"
+#  include "audio/audio_renderer_api.h"
 #endif
 
 #include <stdint.h>
@@ -120,6 +122,10 @@
 
 #define LENGTH_SET_RECORDER_STATUS  4
 
+/*! \brief SetRecorderStatus command (#AUDCMD_SETRECOGNIZERSTATUS) packet length */
+
+#define LENGTH_SET_RECOGNIZER_STATUS  4
+
 /*! \brief SetBaseBandStatus command (#AUDCMD_SETBASEBANDSTATUS) packet length */
 
 #define LENGTH_SET_BASEBAND_STATUS  9
@@ -139,6 +145,10 @@
 /*! \brief PowerOn command (#AUDCMD_SETPOWEROFFSTATUS) packet length */
 
 #define LENGTH_SET_POWEROFF_STATUS  2
+
+/*! \brief SetMicMap command (#AUDCMD_SETMICMAP) packet length */
+
+#define LENGTH_SETMICMAP            4
 
 /*! \brief InitMicGain command (#AUDCMD_INITMICGAIN) packet length */
 
@@ -196,221 +206,9 @@
 
 #define LENGTH_SET_THROUGH_PATH     4
 
-/** @} */
+/*! \brief SetSpDrvMode command ("AUDCMD_SETSPDRVMODE)packet length */
 
-/** @defgroup attention_sub_code Attention Code */
-/** @{ */
-
-/*! \brief DMA Underflow
- *  \details DMA tranfering queue became empty because of DMA read/write request\n
- *           may be slower than DMA transfer speed. To avoid this, request DMA transfer\n
- *           faster than transfer speed. (tranfer speed : 48000 samples/sec)
- */
-
-#define AS_ATTENTION_SUB_CODE_DMA_UNDERFLOW         0x01
-
-/*! \brief DMA Overflow
- *  \details DMA captureing queue became full because of DMA read/write request\n
- *           may be faster than DMA transfer speed. To avoid this, request DMA capture\n
- *           faster than capture speed. (capture speed : 48000 samples/sec)
- */
-
-#define AS_ATTENTION_SUB_CODE_DMA_OVERFLOW          0x02
-
-/*! \brief DMA Error
- *  \details DMA error returned from DMW H/W. It may be wrong register setting. 
- */
-
-#define AS_ATTENTION_SUB_CODE_DMA_ERROR             0x03
-
-/*! \brief APU Queue Full Error
- *  \details DSP response may be delayed and command buffer became full.
- */
-
-#define AS_ATTENTION_SUB_CODE_APU_QUEUE_FULL        0x04
-
-/*! \brief SimpleFIFO Underflow 
- *  \details Simple fifo between application and sdk became empty. Insertion speed\n
- *           may be slower than extraction. Coordinate task priority of application\n
- *           to avoid queue remain decreaseing.
- */
-
-#define AS_ATTENTION_SUB_CODE_SIMPLE_FIFO_UNDERFLOW 0x05
-
-/*! \brief SimpleFIFO Overflow 
- *  \details Simple fifo between application and sdk became full. Extraction speed\n
- *           may be slower than Insertion. Coordinate task priority of application\n
- *           to avoid queue remain increaseing.
- */
-
-#define AS_ATTENTION_SUB_CODE_SIMPLE_FIFO_OVERFLOW  0x06
-
-/*! \brief Illegal Request
- *  \details Cannot accept this event on current state.
- */
-
-#define AS_ATTENTION_SUB_CODE_ILLEGAL_REQUEST       0x07
-
-/*! \brief Internal State Error
- *  \details Internal State Error.
- */
-
-#define AS_ATTENTION_SUB_CODE_INTERNAL_STATE_ERROR  0x08
-
-/*! \brief Unexpected Parameter 
- *  \details The command parameter may be wrong. Revise command parameters.
- */
-
-#define AS_ATTENTION_SUB_CODE_UNEXPECTED_PARAM      0x09
-
-/*! \brief Internal Queue Pop Error
- *  \details The internal process queue is already empty but tried to extraction.
- */
-
-#define AS_ATTENTION_SUB_CODE_QUEUE_POP_ERROR       0x0A
-
-/*! \brief Internal Queue Push Error
- *  \details The internal process queue is already full but tried to insertion.
- */
-
-#define AS_ATTENTION_SUB_CODE_QUEUE_PUSH_ERROR      0x0B
-
-/*! \brief Internal Queue Missing Error
- *  \details The queue became empty unexpectedly.
- */
-
-#define AS_ATTENTION_SUB_CODE_QUEUE_MISSING_ERROR   0x0C
-
-/*! \brief Memory Handle Alloc Error
- *  \details All Memory handles may be used.
- *           Response from DSP may be delayed or get stacked up.
- */
-
-#define AS_ATTENTION_SUB_CODE_MEMHANDLE_ALLOC_ERROR 0x0D
-
-/*! \brief Memory Handle Free Error 
- *  \details The handle may be already freed.
- */
-
-#define AS_ATTENTION_SUB_CODE_MEMHANDLE_FREE_ERROR  0x0E
-
-/*! \brief Task Create Error
- *  \details Task context cannot create.\n
- *           Revise max task creation number on menu config.
- */
-
-#define AS_ATTENTION_SUB_CODE_TASK_CREATE_ERROR     0x0F
-
-/*! \brief Instance Resource Error
- *  \details A class instanse could not create or delete.\n
- *           Check if there duplicate creation of audio objects/components.
- *           And, check heap area size too.
- */
-
-#define AS_ATTENTION_SUB_CODE_RESOURCE_ERROR        0x10
-
-/*! \brief Decoded size equal zero
- *  \details Decoded PCM size euqals to 0, Provided ES data may be broken.
- */
-
-#define AS_ATTENTION_SUB_CODE_DECODED_SIZE_ZERO     0x11
-
-/*! \brief DSP Load Error
- *  \details Tried to load DSP binary to sub core but it was failed.\n
- *           DSP binary may not be stored on dsp load path.
- */
-
-#define AS_ATTENTION_SUB_CODE_DSP_LOAD_ERROR        0x12
-
-/*! \brief DSP Unload Error
- *  \details Tried to unload DSP binary from sub core but it was failed.\n
- *           DSP binary may not loaded.
- */
-
-#define AS_ATTENTION_SUB_CODE_DSP_UNLOAD_ERROR      0x13
-
-/*! \brief DSP Exec Error
- *  \details The data or command which sent to DSP may not be correct format.
- */
-
-#define AS_ATTENTION_SUB_CODE_DSP_EXEC_ERROR        0x14
-
-/*! \brief DSP Result Error
- *  \details DSP result error.
- */
-
-#define AS_ATTENTION_SUB_CODE_DSP_RESULT_ERROR      0x15
-
-/*! \brief DSP Illegal Reply
- *  \detail Command packet from DSP may be broken.
- *          If uses multi DSP, Check duplication of command buffer.
- */
-
-#define AS_ATTENTION_SUB_CODE_DSP_ILLEGAL_REPLY     0x16
-
-/*! \brief DSP Unload Done
- *  \details DSP unload done notification.
- */
-
-#define AS_ATTENTION_SUB_CODE_DSP_UNLOAD_DONE       0x17
-
-/*! \brief DSP Version Error
- *  \details Loaded DSP binary version is differ from expected.
- */
-
-#define AS_ATTENTION_SUB_CODE_DSP_VERSION_ERROR     0x18
-
-/*! \brief BaseBand Error
- *  \details Baseband power may be off. Power on baseband first.
- */
-
-#define AS_ATTENTION_SUB_CODE_BASEBAND_ERROR        0x19
-
-/*! \brief Stream Parser Error
- *  \details ES parsed result may be differ from Player initialize parameters.
- *           Match parameters and ES data.
- */
-
-#define AS_ATTENTION_SUB_CODE_STREAM_PARSER_ERROR   0x1A
-
-/*! \brief DSP Load Done
- *  \details DSP binary load done.
- */
-
-#define AS_ATTENTION_SUB_CODE_DSP_LOAD_DONE         0x1B
-
-/*! \brief Rec Start Action Done
- *  \details Recording start.
- */
-
-#define AS_ATTENTION_SUB_CODE_RECSTART              0x1C
-
-/*! \brief Rec Stop Action Done
- *  \details Recording stop.
- */
-
-#define AS_ATTENTION_SUB_CODE_RECSTOP               0x1D
-
-/*! \brief DSP Debug Dump Log Alloc Error
- *  \details Log area remain size is less than required size.
- *           The log area may be used by Other DSPs.
- */
-
-#define AS_ATTENTION_SUB_CODE_DSP_LOG_ALLOC_ERROR   0x1E
-
-/*! \brief DSP Assertion Fail
- *  \details DSP internal error occured and DSP cannot keep processing.
- */
-
-#define AS_ATTENTION_SUB_CODE_DSP_ASSETION_FAIL     0x1F
-  
-/*! \brief DSP Send Fail
- *  \details Inter CPU commucation with DSP is failed.
- */
-
-#define AS_ATTENTION_SUB_CODE_DSP_SEND_ERROR        0x20
-
-#define AS_ATTENTION_SUB_CODE_NUM   AS_ATTENTION_SUB_CODE_DSP_SEND_ERROR
+#define LENGTH_SETSPDRVMODE         2
 
 /** @} */
 
@@ -665,13 +463,27 @@
 
 #define AS_ECODE_SET_RENDERINGCLK_ERROR          0x3A
 
-/** @} */
+/*! \brief Parameter SetSpDrvMode Error */
 
-#define AS_ERROR_CODE_INFORMATION INFORMATION_ATTENTION_CODE
-#define AS_ERROR_CODE_WARNING     WARNING_ATTENTION_CODE
-#define AS_ERROR_CODE_ERROR       ERROR_ATTENTION_CODE
-#define AS_ERROR_CODE_FATAL       FATAL_ATTENTION_CODE
-#define AsErrorCode               ErrorAttensionCode
+#define AS_ECODE_COMMAND_PARAM_SETSPDRVMODE      0x3B
+
+/*! \brief Set Speaker Driver Mode Error */
+
+#define AS_ECODE_SET_SPDRVMODE_ERROR             0x3C
+
+/*! \brief Set Mic Map Error */
+
+#define AS_ECODE_SET_MICMAP_ERROR                0x3D
+
+/*! \brief Audio SW object cannot available Error */
+
+#define AS_ECODE_OBJECT_NOT_AVAILABLE_ERROR      0x3E
+
+/*! \brief Oscillator Library Initialize Error */
+
+#define AS_ECODE_OSCILLATOR_LIB_INITIALIZE_ERROR 0x3F
+
+/** @} */
 
 /****************************************************************************
  * Public Types
@@ -702,9 +514,9 @@ typedef struct
 
 typedef struct
 {
-  /*! \brief reserved */
+  /*! \brief [out] instance id */
 
-  uint8_t reserved;
+  uint8_t instance_id;
 
   /*! \brief [out] sub code*/
 
@@ -719,25 +531,34 @@ typedef struct
   uint8_t packet_length;
 } AudioResultHeader;
 
-/** Audio Attention Callback function
- * @param[in] module_id: Module ID, #AsModuleId enum type
+/** SetMicMap Command (#AUDCMD_SETMICMAP) parameter */
 
- * @param[in] error_code: Error Code, AsErrorCode enum type
+typedef struct
+{
+  /*! \brief [in] Set Mic mapping
+   *
+   *   mic_map[ch(0 <= ch < AS_MIC_CHANNEL_MAX] correspond to
+   *   each channels, and you can map analog and digital Mics.
+   *
+   *   0x1 : Analog Mic 1
+   *   0x2 : Analog Mic 2 
+   *   0x3 : Analog Mic 3
+   *   0x4 : Analog Mic 4
+   *   0x5 : Digital Mic 1
+   *   0x6 : Digital Mic 2
+   *   0x7 : Digital Mic 3
+   *   0x8 : Digital Mic 4
+   *   0x9 : Digital Mic 5
+   *   0xA : Digital Mic 6
+   *   0xB : Digital Mic 7
+   *   0xC : Digital Mic 8
+   *   other : No assing
+   *
+   */
 
- * @param[in] sub_code: Sub Code
- */
+  uint8_t mic_map[AS_MIC_CHANNEL_MAX]; 
 
-#ifndef ATTENTION_USE_FILENAME_LINE
-typedef void (*AudioAttentionCb)(uint8_t module_id,
-                                 uint8_t error_code,
-                                 uint8_t sub_code);
-#else
-typedef void (*AudioAttentionCb)(uint8_t module_id,
-                                 uint8_t error_code,
-                                 uint8_t sub_code,
-                                 FAR const char *file_name,
-                                 uint32_t line);
-#endif
+} SetMicMapParam;
 
 /** InitMicGain Command (#AUDCMD_INITMICGAIN) parameter */
 
@@ -816,7 +637,8 @@ typedef struct
   uint16_t reserved2;
 } InitOutputSelectParam;
 
-/** (__not supported__) InitDNCParam Command (#AUDCMD_INITDNCPARAM) parameter
+/** \brief InitDNCParam Command (#AUDCMD_INITDNCPARAM) parameter
+ *  \deprecated It will be removed in the future
  */
 
 typedef enum
@@ -849,7 +671,7 @@ typedef struct {
   /*! \brief [in] Set ClearStero Volume
    *
    * -825:-82.5dB(default), ... -195:-19.5dB,
-   * #AS_ CS_VOL_HOLD:keep setting
+   * #AS_CS_VOL_HOLD:keep setting
    */
 
   int16_t cs_vol;
@@ -966,6 +788,21 @@ typedef struct
   uint8_t  reserved3;
 } SetRenderingClkParam;
 
+/** SetSpDrvMode Command (#AUDCMD_SETSPDRVMODE) parameter */
+
+typedef struct
+{
+  /*! \brief [in] set speaker driver mode
+   *
+   * Use #AsSpDrvMode enum type.
+   */
+
+  uint8_t  mode;
+  uint8_t  reserved1;
+  uint8_t  reserved2;
+  uint8_t  reserved3;
+} SetSpDrvModeParam;
+
 /** SetRenderingClk Command (#AUDCMD_SETRENDERINGCLK) parameter */
 
 typedef enum
@@ -982,7 +819,9 @@ typedef enum
 
   AS_DISABLE_SOUNDEFFECT = 0,
 
-  /*! \brief Enable effect sound (__not supported__) */
+  /*! \brief Enable effect sound
+   *  \deprecated It will be removed in the future
+   */
 
   AS_ENABLE_SOUNDEFFECT,
   AS_SOUNDEFFECT_NUM
@@ -1023,6 +862,17 @@ typedef enum
   AS_THROUGH_PATH_OUT_I2S2,
   AS_THROUGH_PATH_OUT_NUM
 } AsThroughPathOut;
+
+/** Speaker driver mode */
+
+typedef enum
+{
+  AS_SP_DRV_MODE_LINEOUT = 0,
+  AS_SP_DRV_MODE_1DRIVER,
+  AS_SP_DRV_MODE_2DRIVER,
+  AS_SP_DRV_MODE_4DRIVER,
+  AS_SP_DRV_MODE_NUM
+} AsSpDrvMode;
 
 /** Through path of audio data (used in AsSetThroughPathParam) parameter */
 
@@ -1065,6 +915,179 @@ typedef struct
 
 } AsSetThroughPathParam;
 
+#ifdef AS_FEATURE_OUTPUTMIX_ENABLE
+
+/* Init OutputMixer Command (#AUDCMD_INIT_OUTPUTMIXER) */
+
+typedef struct
+{
+  uint8_t  player_id;
+
+  /*! \brief [in] Set postproc type. Use AsPostprocType enum type */
+
+  uint8_t postproc_type;
+
+  /*! \brief [in] Set dsp file name and path */
+
+  char dsp_path[AS_POSTPROC_FILE_PATH_LEN];
+
+} AsInitMixerParam;
+
+/** Request Clock Recovery Command (#AUDCMD_CLKRECOVERY) parameter */
+
+typedef struct
+{
+  /*! \brief [in] Handle of OutputMixer */
+
+  uint8_t  player_id;
+
+  int8_t   direction;
+
+  uint32_t times;
+
+} AsPlayerClockRecovery;
+
+/** InitMpp Command (#AUDCMD_INITMPP) parameter */
+
+typedef struct
+{
+  uint8_t  player_id;
+
+  AsInitPostProc initpp_param;
+
+} AsInitMediaPlayerPost;
+
+/** SetMpp Command (#AUDCMD_SETMPPPARAM) parameter */
+
+typedef struct
+{
+  uint8_t  player_id;
+
+  AsSetPostProc setpp_param;
+
+} AsSetMediaPlayerPost;
+
+#endif
+
+#ifdef AS_FEATURE_FRONTEND_ENABLE
+
+typedef enum
+{
+  /*! \brief [in] Send audio data to Recorder
+   */
+
+  AsMicFrontendDataToRecorder = 0,
+
+  /*! \brief [in] Send audio data to Recognizer
+   */
+
+  AsMicFrontendDataToRecognizer,
+
+} AsFrontendDataDest;
+
+/** Initialize Command (#AUDCMD_INIT_MICFRONTEND) parameter */
+
+typedef struct
+{
+  /*! \brief [in] Select InitMicFrontend input channels
+   */
+
+  uint8_t  ch_num;
+
+  /*! \brief [in] Select InitMicFrontend input bit length
+   */
+
+  uint8_t  bit_length;
+
+  /*! \brief [in] Samples per a frame
+   */
+
+  uint16_t samples;
+
+  /*! \brief [in] Output Fs
+   *
+   * !! effective only when preproc_type is "AsMicFrontendPreProcSrc" !!
+   */
+
+  uint32_t out_fs;
+
+  /*! \brief [in] Select pre process enable 
+   *
+   * Use #AsMicFrontendPreProcType enum type
+   */
+
+  uint8_t  preproc_type;
+
+  /*! \brief [in] Set dsp file name and path 
+   */
+
+  char preprocess_dsp_path[AS_PREPROCESS_FILE_PATH_LEN];
+
+  /*! \brief [in] Select Data path from MicFrontend 
+   *
+   * Use #AsMicFrontendDataDest enum type
+   */
+
+  uint8_t data_dest;
+  
+} AsInitMicFrontEnd;
+
+#endif
+
+#ifdef AS_FEATURE_RECOGNIZER_ENABLE
+
+/** SetRecognizerStatus Command (#AUDCMD_SETRECOGNIZERSTATUS) parameter */
+
+typedef struct
+{
+  /*! \brief [in] Select Recorder input device
+   *
+   * Use #AsMicFrontendInputDevice enum type
+   */
+
+  uint8_t  input_device;
+
+} AsSetRecognizerStatus;
+
+/** InitVoiceCommand Command (#AUDCMD_INIT_RECOGNIZER) parameter */
+
+typedef void (*RecognizerFindCallback)(AsRecognitionInfo info);
+
+typedef struct
+{
+  /*! \brief [in] Recognizer type 
+   */
+
+  uint8_t recognizer_type;
+
+  /*! \brief [in] Recognizer file name and path 
+   */
+
+  char recognizer_dsp_path[AS_RECOGNIZER_FILE_PATH_LEN];
+
+  /*! \brief [in] Recognizer find callback */
+
+  RecognizerFindCallback fcb;
+
+} AsInitRecognizer;
+
+/** StartVoiceCommand Command (#AUDCMD_START_RECOGNIZER) parameter */
+
+typedef struct
+{
+  uint32_t reserve;
+
+} AsStartRecognizer;
+
+/** StopVoiceCommand Command (#AUDCMD_STOP_RECOGNIZER) parameter */
+
+typedef struct
+{
+  uint32_t reserve;
+
+} AsStopRecognizer;
+#endif /* AS_FEATURE_RECOGNIZER_ENABLE */
+
 /** Audio command packet */
 
 #if defined(__CC_ARM)
@@ -1079,38 +1102,23 @@ typedef struct
   union
   {
 #ifdef AS_FEATURE_EFFECTOR_ENABLE
-    /*! \brief [in] for InitMFE
-     * (header.command_code==#AUDCMD_INITMFE)
-     */
-
-    InitMFEParam init_mfe_param;
-
     /*! \brief [in] for StartBB
      * (header.command_code==#AUDCMD_STARTBB)
+     *  \deprecated It will be removed in the future
      */
 
     StartBBParam start_bb_param;
 
     /*! \brief [in] for StopBB
      * (header.command_code==#AUDCMD_STOPBB)
+     *  \deprecated It will be removed in the future
      */
 
     StopBBParam stop_bb_param;
 
-    /*! \brief [in] for InitMPP
-     * (header.command_code==#AUDCMD_INITMPP)
-     */
-
-    InitMPPParam init_mpp_param;
-
-    /*! \brief [in] for SetMPPParam
-     * (header.command_code==#AUDCMD_SETMPPPARAM)
-     */
-
-    SetMPPParam set_mpp_param;
-
     /*! \brief [in] for SetBaseBandStatus
      * (header.command_code==#AUDCMD_SETBASEBANDSTATUS)
+     *  \deprecated It will be removed in the future
      */
 
     SetBaseBandStatusParam set_baseband_status_param;
@@ -1127,11 +1135,52 @@ typedef struct
 
     PlayerCommand player;
 
+#endif
+#ifdef AS_FEATURE_OUTPUTMIX_ENABLE
+    /*! \brief [in] for Init OutputMixer 
+     * (header.command_code==#AUDCMD_INIT_OUTPUTMIXER)
+     */
+
+    AsInitMixerParam init_mixer_param;
+
     /*! \brief [in] for Adjust sound period
      * (header.command_code==#AUDCMD_CLKRECOVERY)
      */
 
     AsPlayerClockRecovery clk_recovery_param;
+
+    /*! \brief [in] for InitMPP
+     * (header.command_code==#AUDCMD_INITMPP)
+     */
+
+    AsInitMediaPlayerPost init_mpp_param;
+
+    /*! \brief [in] for SetMPPParam
+     * (header.command_code==#AUDCMD_SETMPPPARAM)
+     */
+
+    AsSetMediaPlayerPost set_mpp_param;
+
+#endif
+#ifdef AS_FEATURE_FRONTEND_ENABLE
+
+    /*! \brief [in] for InitMicFrontend 
+     * (header.command_code==#AUDCMD_INIT_MICFRONTEND)
+     */
+
+    AsInitMicFrontEnd init_micfrontend_param;
+
+    /*! \brief [in] for InitPreProcessDSP
+     * (header.command_code==#AUDCMD_INIT_PREPROCESS_DSP)
+     */
+
+    AsInitPreProcParam init_preproc_param;
+
+    /*! \brief [in] for SetPreProcessDSP
+     * (header.command_code==#AUDCMD_SET_PREPROCESS_DSP)
+     */
+
+    AsSetPreProcParam set_preproc_param;
 
 #endif
 #ifdef AS_FEATURE_RECORDER_ENABLE
@@ -1149,12 +1198,50 @@ typedef struct
 
 #endif
 #ifdef AS_FEATURE_RECOGNIZER_ENABLE
-    /*! \brief [in] for StratVoiceCommand
-     * (header.command_code==#AUDCMD_STARTVOICECOMMAND)
+
+    /*! \brief [in] for SetRecognizerStatus 
+     * (header.command_code==#AUDCMD_SETRECOGNIZERSTATUS)
      */
 
-    StartVoiceCommandParam start_voice_command_param;
+    AsSetRecognizerStatus set_recognizer_status_param;
+
+    /*! \brief [in] for InitVoiceCommand
+     * (header.command_code==#AUDCMD_INIT_RECOGNIZER)
+     */
+
+    AsInitRecognizer init_recognizer;
+
+    /*! \brief [in] for StratVoiceCommand
+     * (header.command_code==#AUDCMD_START_RECOGNIZER)
+     */
+
+    AsStartRecognizer start_recognizer;
+
+    /*! \brief [in] for StopVoiceCommand
+     * (header.command_code==#AUDCMD_STOP_RECOGNIZER)
+     */
+
+    AsStopRecognizer stop_recognizer;
+
+    /*! \brief [in] for InitRecognizerDSPCommand 
+     * (header.command_code==#AUDCMD_INIT_RECOGNIZER_DSP)
+     */
+
+    AsInitRecognizerProcParam init_rcg_param;
+
+    /*! \brief [in] for SetRecognizerDSPCommand 
+     * (header.command_code==#AUDCMD_SET_RECOGNIZER_DSP)
+     */
+
+    AsSetRecognizerProcParam set_rcg_param;
+
 #endif
+
+    /*! \brief [in] for SetMicMap
+     * (header.command_code==#AUDCMD_SETMICMAP)
+     */
+
+    SetMicMapParam set_mic_map_param;
 
     /*! \brief [in] for InitMicGain
      * (header.command_code==#AUDCMD_INITMICGAIN)
@@ -1164,6 +1251,7 @@ typedef struct
 
     /*! \brief [in] for InitI2SParam
      * (header.command_code==#AUDCMD_INITI2SPARAM)
+     *  \deprecated It will be removed in the future
      */
 
     InitI2SParam init_i2s_param;
@@ -1176,12 +1264,14 @@ typedef struct
 
     /*! \brief [in] for InitDNCParam
      * (header.command_code==#AUDCMD_INITDNCPARAM)
+     *  \deprecated It will be removed in the future
      */
 
     InitDNCParam init_dnc_param;
 
     /*! \brief [in] for InitClearStereo
      * (header.command_code==#AUDCMD_INITCLEARSTEREO)
+     *  \deprecated It will be removed in the future
      */
 
     InitClearStereoParam init_clear_stereo_param;
@@ -1221,6 +1311,12 @@ typedef struct
      */
 
     SetRenderingClkParam set_renderingclk_param;
+
+    /*! \brief [in] for SetSpDrvMode
+     * (header.command_code==#AUDCMD_SETSPDRVMODE)
+     */
+
+    SetSpDrvModeParam set_sp_drv_mode;
   };
 
 #ifdef __cplusplus
@@ -1265,6 +1361,10 @@ typedef enum
 
   AS_MNG_STATUS_RECORDER,
 
+  /*! \brief Recorder */
+
+  AS_MNG_STATUS_RECOGNIZER,
+
   /*! \brief PowerOff */
 
   AS_MNG_STATUS_POWEROFF,
@@ -1303,6 +1403,14 @@ typedef enum
   /*! \brief RecorderActive */
 
   AS_MNG_SUB_STATUS_RECORDERACTIVE,
+
+  /*! \brief RecognizerReady */
+
+  AS_MNG_SUB_STATUS_RECOGNIZERREADY,
+
+  /*! \brief RecognizerActive */
+
+  AS_MNG_SUB_STATUS_RECOGNIZERACTIVE,
 
   /*! \brief BaseBandReady */
 
@@ -1365,75 +1473,7 @@ typedef enum
   AS_STATUS_CHANGED_STS_NUM
 } AsStatusChangedSts;
 
-/** Audio Module ID */
 
-/** @defgroup module_id_code Module ID */
-/** @{ */
-
-typedef enum
-{
-  /*! \brief Audio Manager Module ID */
-
-  AS_MODULE_ID_AUDIO_MANAGER = 0,
-
-  /*! \brief Audio Baseband Driver Module ID */
-  AS_MODULE_ID_AUDIO_DRIVER,
-
-  /*! \brief Input Data Manager Object ID */
-
-  AS_MODULE_ID_INPUT_DATA_MNG_OBJ,
-
-  /*! \brief Media Recorder Object ID */
-
-  AS_MODULE_ID_MEDIA_RECORDER_OBJ,
-
-  /*! \brief Output Mix Object ID */
-
-  AS_MODULE_ID_OUTPUT_MIX_OBJ,
-
-  /*! \brief Player Object ID */
-
-  AS_MODULE_ID_PLAYER_OBJ,
-
-  /*! \brief Recognition Object ID */
-
-  AS_MODULE_ID_RECOGNITION_OBJ,
-
-  /*! \brief Sound Effect Object ID */
-
-  AS_MODULE_ID_SOUND_EFFECT_OBJ,
-
-  /*! \brief Capture Component ID */
-
-  AS_MODULE_ID_CAPTURE_CMP,
-
-  /*! \brief Decoder Component ID */
-
-  AS_MODULE_ID_DECODER_CMP,
-
-  /*! \brief Encoder Component ID */
-
-  AS_MODULE_ID_ENCODER_CMP,
-
-  /*! \brief Filter Component ID */
-
-  AS_MODULE_ID_FILTER_CMP,
-
-  /*! \brief Recognition Component ID */
-
-  AS_MODULE_ID_RECOGNITION_CMP,
-
-  /*! \brief Renderer Component ID */
-
-  AS_MODULE_ID_RENDERER_CMP,
-
-  /*! \brief Postfilter Component ID */
-
-  AS_MODULE_ID_POSTFILTER_CMP,
-  AS_MODULE_ID_NUM,
-} AsModuleId;
-
-/** @} */
 
 /** Audio Manager error code */
 
@@ -1571,83 +1611,6 @@ typedef struct
   uint32_t ErrorCommand[LENGTH_AUDRLT_ERRORRESPONSE_MAX-LENGTH_AUDRLT_ERRORRESPONSE_MIN];
 } ErrorResponseParam;
 
-/** ErrorAttention Result (#AUDRLT_ERRORATTENTION) parameter */
-
-typedef struct
-{
-  /*! \brief [out] reserved */
-
-  uint32_t reserved1;
-
-  /*! \brief [out] Error Infomation, T.B.D. */
-
-  uint8_t  error_code;
-
-  /*! \brief [out] CPU ID (internal use only) */
-
-  uint8_t  cpu_id;
-
-  /*! \brief [out] for debug purpose */
-
-  uint8_t  sub_module_id;
-
-  /*! \brief [out] Error module infomation, T.B.D. */
-
-  uint8_t  module_id;
-
-  /*! \brief [out] Detailed Error Infomation, T.B.D. */
-
-  uint32_t error_att_sub_code;
-
-  /*! \brief [out] reserved */
-
-  uint32_t reserved2;
-
-  /*! \brief [out] Line No (internal use only) */
-
-  uint16_t line_number;
-
-  /*! \brief [out] Task ID (internal use only) */
-
-  uint8_t  task_id;
-
-  /*! \brief [out] reserved */
-
-  uint8_t  reserved3;
-
-  /*! \brief [out] File name (internal use only) */
-
-  uint32_t error_filename_1;
-
-  /*! \brief [out] File name (internal use only) */
-
-  uint32_t error_filename_2;
-
-  /*! \brief [out] File name (internal use only) */
-
-  uint32_t error_filename_3;
-
-  /*! \brief [out] File name (internal use only) */
-
-  uint32_t error_filename_4;
-
-  /*! \brief [out] File name (internal use only) */
-
-  uint32_t error_filename_5;
-
-  /*! \brief [out] File name (internal use only) */
-
-  uint32_t error_filename_6;
-
-  /*! \brief [out] File name (internal use only) */
-
-  uint32_t error_filename_7;
-
-  /*! \brief [out] File name (internal use only) */
-
-  uint32_t error_filename_8;
-} ErrorAttentionParam;
-
 /** Audio result packet
  */
 #if defined(__CC_ARM)
@@ -1686,7 +1649,6 @@ typedef struct {
 } AudioResult __attribute__((transparent_union));
 #endif
 
-
 /* Error Code */
 /* [T.B.D]
  *
@@ -1717,6 +1679,10 @@ typedef struct
 
   uint8_t player_sub;
 
+  /*! \brief [in] MsgQueID of FrontendObject */
+
+  uint8_t micfrontend;
+
   /*! \brief [in] MsgQueID of recorderObject */
 
   uint8_t recorder;
@@ -1746,10 +1712,6 @@ typedef struct
  * Public Function Prototypes
  ****************************************************************************/
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 /**
  * @brief Send Audio Command
  *
@@ -1771,6 +1733,22 @@ int AS_SendAudioCommand(AudioCommand* packet);
 int AS_ReceiveAudioResult(AudioResult* packet);
 
 /**
+ * @brief Receive Audio Result for multithread
+ *
+ * @param[out] packet: AudioResult*: Result packet
+ *
+ * @param[in] rply: Request message id
+ *
+ * @param[in] id: AsPlayerId
+ *
+ * @param[in] tmo: Timeout (ms)
+ *
+ * @retval error code
+ */
+
+int AS_ReceiveAudioResult(FAR AudioResult *packet, uint8_t id, uint32_t tmo);
+
+/**
  * @brief Activate AudioSubSystem
  *
  * @param[in] ids: AudioSubSystemIDs* Message Queue ID of Audio Module
@@ -1781,17 +1759,27 @@ int AS_ReceiveAudioResult(AudioResult* packet);
 int AS_CreateAudioManager(AudioSubSystemIDs ids, AudioAttentionCb att_cb);
 
 /**
+ * @brief Activate AudioSubSystem[Deprecated]
+ *        This API is to make it compatible with old application.
+ *        Will delete most application seems to migrate to new API.
+ *
+ * @param[in] ids: AudioSubSystemIDs* Message Queue ID of Audio Module
+ *
+ * @retval error code
+ */
+
+__attribute__((deprecated("\nDeprecated attention callback type is used. \
+                           \nPlease use \"AudioAttentionCb\" as callback type. \
+                           \n")))
+int AS_CreateAudioManager(AudioSubSystemIDs ids, obs_AudioAttentionCb obs_att_cb);
+
+/**
  * @brief Deactivate AudioSubSystem
  *
  * @retval error code
  */
 
 int AS_DeleteAudioManager(void);
-
-#ifdef __cplusplus
-}
-#endif
-
 
 /** @} */
 

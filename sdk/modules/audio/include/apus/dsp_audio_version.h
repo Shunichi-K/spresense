@@ -50,20 +50,20 @@
 
 /* Decoder Version. */
 
-#define DSP_AACDEC_VERSION    0x010302    /* 01.03.02 */
-#define DSP_MP3DEC_VERSION    0x010302    /* 01.03.02 */
-#define DSP_OPUSDEC_VERSION   0x010303    /* 01.03.03 */
-#define DSP_WAVDEC_VERSION    0x010302    /* 01.03.02 */
+#define DSP_AACDEC_VERSION    0x010303    /* 01.03.03 */
+#define DSP_MP3DEC_VERSION    0x010303    /* 01.03.03 */
+#define DSP_OPUSDEC_VERSION   0x010304    /* 01.03.04 */
+#define DSP_WAVDEC_VERSION    0x010403    /* 01.04.03 */
 
 /* Encoder Version. */
 
-#define DSP_MP3ENC_VERSION    0x020102    /* 02.01.02 */
+#define DSP_MP3ENC_VERSION    0x020103    /* 02.01.03 */
 #define DSP_OPUSENC_VERSION   0x010306    /* 01.03.06 */
 
 /* Filter Version. */
 
 #define DSP_MFESRC_VERSION    0x010203    /* 01.02.03 */
-#define DSP_SRC_VERSION       0x020102    /* 02.01.02 */
+#define DSP_SRC_VERSION       0x020104    /* 02.01.04 */
 #define DSP_MPPEAX_VERSION    0x010203    /* 01.02.03 */
 
 /* Postfilter Version. */
@@ -75,6 +75,18 @@
 #define DSP_FREQDET_VERSION   0x010202    /* 01.02.02 */
 #define DSP_MEASURE_VERSION   0x010202    /* 01.02.02 */
 #define DSP_VADWUW_VERSION    0x010203    /* 01.02.03 */
+
+/* Oscillator Version. */
+
+#define DSP_OSC_VERSION       0x000001    /* 00.00.01 */
+
+/* Version and cpu-id Mask. */
+
+#define DSP_VERSION_MASK      0x00FFFFFF  /* 24bits [23-0]  */
+#define DSP_CPU_ID_MASK       0xFF000000  /*  8bits [31-24] */
+
+#define DSP_VERSION_GET_VER(data)    ((data) & 0x00FFFFFF)
+#define DSP_VERSION_GET_CPU_ID(data) (((data) & 0xFF000000) >> 24)
 
 /****************************************************************************
  * Public Types

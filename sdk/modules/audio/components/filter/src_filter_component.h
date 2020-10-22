@@ -37,110 +37,77 @@
 #define SRC_FILTER_COMPONENT_H
 
 #include "memutils/os_utils/chateau_osal.h"
-
 #include "wien2_common_defs.h"
 #include "memutils/s_stl/queue.h"
 #include "apus/apu_cmd.h"
 #include "memutils/memory_manager/MemHandle.h"
 #include "memutils/message/Message.h"
-
 #include "dsp_driver/include/dsp_drv.h"
-#include "components/common/component_common.h"
-
+#include "components/component_base.h"
 #include "debug/dbg_log.h"
 
 __WIEN2_BEGIN_NAMESPACE
 using namespace MemMgrLite;
 
 /*--------------------------------------------------------------------*/
-struct InitSRCParam
-{
-  int32_t  sample_num;
-  uint32_t input_sampling_rate;
-  uint32_t output_sampling_rate;
-  uint16_t input_pcm_byte_length;
-  uint16_t output_pcm_byte_length;
-  uint8_t  channel_num;
-};
+/* Data structure definitions                                         */
+/*--------------------------------------------------------------------*/
 
-struct ExecSRCParam
-{
-  BufferHeader input_buffer;
-  BufferHeader output_buffer;
-};
-
-struct StopSRCParam
-{
-  BufferHeader output_buffer;
-};
 
 /*--------------------------------------------------------------------*/
-class SRCComponent : public ComponentCommon
+/* Class definitions                                                  */
+/*--------------------------------------------------------------------*/
+
+class SRCComponent : public ComponentBase
 {
 private:
-  typedef bool (*MppCompCallback)(DspDrvComPrm_t*);
-  MppCompCallback m_callback;
 
 #ifdef CONFIG_AUDIOUTILS_DSP_DEBUG_DUMP
   DebugLogInfo m_debug_log_info;
 #endif
 
-public:
-  SRCComponent(MsgQueId apu_dtq,PoolId apu_pool_id)
-    : m_apu_dtq(apu_dtq)
-    , m_apu_pool_id(apu_pool_id)
-    ,m_dsp_handler(NULL) {}
-  ~SRCComponent() {}
+  /* Request queue */
 
-  uint32_t activate_apu(SRCComponent *p_component, const char *path, uint32_t *dsp_inf);
-  bool deactivate_apu();
-  uint32_t init_apu(InitSRCParam param, uint32_t *dsp_inf);
-  bool exec_apu(ExecSRCParam param);
-  bool flush_apu(StopSRCParam param);
+  static const uint32_t ReqQueueSize = 7;
 
-  bool setCallBack(MppCompCallback func) { m_callback = func; return true; };
-  bool recv_apu(DspDrvComPrm_t*);
-  bool recv_done(void) { return freeApuCmdBuf(); };
-  MsgQueId get_apu_mid(void) { return m_apu_dtq; };
+ struct ApuReqData
+  {
+    MemMgrLite::MemHandle cmd_mh;
+    AsPcmDataParam        input;
+    MemMgrLite::MemHandle output_mh;
+  };
 
-private:
-  typedef s_std::Queue<MemMgrLite::MemHandle, APU_COMMAND_QUEUE_SIZE> ApuQue;
-  ApuQue m_apu_cmd_mh_que;
+  s_std::Queue<ApuReqData, ReqQueueSize> m_apu_req_que;
 
   MsgQueId m_apu_dtq;
   PoolId m_apu_pool_id;
 
   void send_apu(Apu::Wien2ApuCmd*);
 
-  void* getApuCmdBuf()
-  {
-    MemMgrLite::MemHandle mh;
+public:
 
-    if (mh.allocSeg(m_apu_pool_id, sizeof(Apu::Wien2ApuCmd)) != ERR_OK)
-      {
-        FILTER_WARN(AS_ATTENTION_SUB_CODE_MEMHANDLE_ALLOC_ERROR);
-        return NULL;
-      }
+  SRCComponent(PoolId apu_pool_id, MsgQueId apu_dtq)
+    : m_apu_dtq(apu_dtq)
+    , m_apu_pool_id(apu_pool_id)
+    , m_dsp_handler(NULL) {}
+  ~SRCComponent() {}
 
-    if (!m_apu_cmd_mh_que.push(mh))
-      {
-        FILTER_ERR(AS_ATTENTION_SUB_CODE_QUEUE_PUSH_ERROR);
-        return NULL;
-      }
+  virtual uint32_t init(const InitComponentParam& param);
+  virtual bool exec(const ExecComponentParam& param);
+  virtual bool flush(const FlushComponentParam& param);
+  virtual bool set(const SetComponentParam& param);
+  virtual bool recv_done(ComponentCmpltParam *cmplt);
+  virtual bool recv_done(ComponentInformParam *info);
+  virtual bool recv_done(void);
+  virtual uint32_t activate(ComponentCallback callback,
+                            const char *image_name,
+                            void *p_requester,
+                            uint32_t *dsp_inf);
+  virtual bool deactivate();
 
-    return mh.getPa();
-  }
+  bool recv_apu(DspDrvComPrm_t*);
 
-  bool freeApuCmdBuf()
-  {
-    if (!m_apu_cmd_mh_que.pop())
-      {
-        FILTER_ERR(AS_ATTENTION_SUB_CODE_MEMHANDLE_FREE_ERROR);
-        return false;
-      }
-
-    return true;
-  }
+  MsgQueId get_apu_mid(void) { return m_apu_dtq; };
 
   void *m_dsp_handler;
 };

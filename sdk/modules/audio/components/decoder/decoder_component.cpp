@@ -34,11 +34,12 @@
  ****************************************************************************/
 
 #include <arch/chip/backuplog.h>
+#include <sdk/debug.h>
 
 #include "decoder_component.h"
 
 #include "memutils/common_utils/common_assert.h"
-#include "common/audio_internal_message_types.h"
+#include "audio/audio_message_types.h"
 #include "memutils/message/Message.h"
 
 #include "apus/cpuif_cmd.h"
@@ -67,6 +68,20 @@ static const char g_entry_name[LOG_ENTRY_NUM][LOG_ENTRY_NAME] =
 };
 
 static uint32_t g_namemap = 0x00000000;
+#endif
+
+#ifdef CONFIG_AUDIOUTILS_DECODER_TIME_MEASUREMENT
+#include <time.h>
+uint64_t g_start_time = 0x0ull;
+uint64_t g_end_time   = 0x0ull;
+
+static void get_time(uint64_t *time)
+{
+ struct timespec now;
+ clock_gettime(CLOCK_REALTIME, &now);
+ *time = (uint64_t)now.tv_sec * 1000 +
+          (uint64_t)now.tv_nsec / 1000000;
+}
 #endif
 
 extern "C" {
@@ -147,14 +162,9 @@ bool AS_decode_recv_done(void *p_instance)
 }
 
 /*--------------------------------------------------------------------*/
-uint32_t AS_decode_activate(AudioCodec param,
-                            const char *path,
-                            void **p_instance,
-                            MemMgrLite::PoolId apu_pool_id,
-                            MsgQueId apu_mid,
-                            uint32_t *dsp_inf)
+uint32_t AS_decode_activate(FAR ActDecCompParam *param)
 {
-  if (p_instance == NULL)
+  if (param->p_instance == NULL)
     {
       DECODER_ERR(AS_ATTENTION_SUB_CODE_UNEXPECTED_PARAM);
       return AS_ECODE_COMMAND_PARAM_OUTPUT_DATE;
@@ -162,15 +172,16 @@ uint32_t AS_decode_activate(AudioCodec param,
 
   /* Reply pointer of self instance, which is used for API call. */
 
-  *p_instance = (void*)(new DecoderComponent(apu_pool_id,apu_mid));
+  *param->p_instance = (void*)(new DecoderComponent(param->apu_pool_id,
+                                                    param->apu_mid));
 
-  if (*p_instance == NULL)
+  if (*param->p_instance == NULL)
     {
       DECODER_ERR(AS_ATTENTION_SUB_CODE_RESOURCE_ERROR);
       return AS_ECODE_COMMAND_PARAM_OUTPUT_DATE;
     }
 
-  return ((DecoderComponent*)*p_instance)->activate(param, path, dsp_inf);
+  return ((DecoderComponent*)*param->p_instance)->activate(param);
 }
 
 /*--------------------------------------------------------------------*/
@@ -264,7 +275,9 @@ uint32_t DecoderComponent::init_apu(const InitDecCompParam& param,
   p_apu_cmd->init_dec_cmd.codec_type     = param.codec_type;
   p_apu_cmd->init_dec_cmd.channel_num    = param.channel_num;
   p_apu_cmd->init_dec_cmd.sampling_rate  = param.input_sampling_rate;
-  p_apu_cmd->init_dec_cmd.channel_config = AUD_PCM_CH_CONFIG_2_0;
+  p_apu_cmd->init_dec_cmd.channel_config =
+    (param.channel_num == MonoChannels) ?
+      AUD_PCM_CH_CONFIG_1_0 : AUD_PCM_CH_CONFIG_2_0;
 
   p_apu_cmd->init_dec_cmd.out_pcm_param.bit_length     = param.bit_width;
   p_apu_cmd->init_dec_cmd.out_pcm_param.channel_format = Aud2ChannelFormat;
@@ -283,6 +296,18 @@ uint32_t DecoderComponent::init_apu(const InitDecCompParam& param,
   else
     {
       p_apu_cmd->init_dec_cmd.out_pcm_param.sampling_rate = 48000;
+    }
+
+  p_apu_cmd->init_dec_cmd.work_buffer  = param.work_buffer;
+  if (param.dsp_multi_core)
+    {
+      p_apu_cmd->init_dec_cmd.use_slave_cpu = true;
+      p_apu_cmd->init_dec_cmd.slave_cpu_id = m_slave_cpu_id;
+    }
+  else
+    {
+      p_apu_cmd->init_dec_cmd.use_slave_cpu = false;
+      p_apu_cmd->init_dec_cmd.slave_cpu_id = APU_INVALID_CPU_ID;
     }
 
   /* Note: CXD5602 supports only stereo format. */
@@ -348,7 +373,11 @@ uint32_t DecoderComponent::init_apu(const InitDecCompParam& param,
 
   send_apu(p_apu_cmd);
 
-  uint32_t rst = dsp_init_check(m_apu_mid, dsp_inf);
+  /* Wait init completion and receive reply information */
+
+  Apu::InternalResult internal_result;
+  uint32_t rst = dsp_init_check<Apu::InternalResult>(m_apu_mid, &internal_result);
+  *dsp_inf = internal_result.value;
 
   return rst;
 }
@@ -374,6 +403,10 @@ bool DecoderComponent::exec_apu(const ExecDecCompParam& param)
   p_apu_cmd->exec_dec_cmd.num_of_au     = param.num_of_au;
 
   send_apu(p_apu_cmd);
+
+#ifdef CONFIG_AUDIOUTILS_DECODER_TIME_MEASUREMENT
+  get_time(&g_start_time);
+#endif
 
   return true;
 }
@@ -438,7 +471,7 @@ void DecoderComponent::send_apu(Apu::Wien2ApuCmd *p_cmd)
   int ret = DD_SendCommand(m_dsp_handler, &com_param);
   if (ret != DSPDRV_NOERROR)
     {
-      _err("DD_SendCommand() failure. %d\n", ret);
+      logerr("DD_SendCommand() failure. %d\n", ret);
       ENCODER_ERR(AS_ATTENTION_SUB_CODE_DSP_SEND_ERROR);
       return;
     }
@@ -453,14 +486,48 @@ bool DecoderComponent::recv_apu(void *p_response)
 
   if (Apu::ApuExecOK != packet->result.exec_result)
     {
-      DECODER_ERR(AS_ATTENTION_SUB_CODE_DSP_EXEC_ERROR);
+      switch (packet->header.event_type)
+        {
+          case Apu::InitEvent:
+            logerr("DSP InitEvent failure.\n");
+            break;
+
+          case Apu::ExecEvent:
+            logerr("DSP ExecEvent failure.\n");
+            break;
+
+          case Apu::FlushEvent:
+            logerr("DSP FlushEvent failure.\n");
+            break;
+
+          default:
+            logerr("DSP UnknownEvent receive.\n");
+            break;
+        }
+      logerr(" result  = %d\n", packet->result.exec_result);
+      logerr(" res_src = %d\n", packet->result.internal_result[0].res_src);
+      logerr(" code    = %d\n", packet->result.internal_result[0].code);
+      logerr(" value   = %d\n", packet->result.internal_result[0].value);
+      DECODER_WARN(AS_ATTENTION_SUB_CODE_DSP_EXEC_ERROR);
     }
 
   if (Apu::InitEvent == packet->header.event_type)
     {
-      dsp_init_complete(m_apu_mid, packet);
+      /* Notify init completion to myself */
+
+      Apu::InternalResult internal_result = packet->result.internal_result[0];
+      dsp_init_complete<Apu::InternalResult>(m_apu_mid, packet->result.exec_result, &internal_result);
+
       return true;
     }
+
+#ifdef CONFIG_AUDIOUTILS_DECODER_TIME_MEASUREMENT
+  if (Apu::ExecEvent == packet->header.event_type)
+    {
+      get_time(&g_end_time);
+      syslog(LOG_DEBUG, "DEC time %08d ms\n", g_end_time - g_start_time);
+    }
+#endif
 
   /* Notify to requester */
 
@@ -468,34 +535,32 @@ bool DecoderComponent::recv_apu(void *p_response)
 }
 
 /*--------------------------------------------------------------------*/
-uint32_t DecoderComponent::activate(AudioCodec param,
-                                    const char *path,
-                                    uint32_t *dsp_inf)
+uint32_t DecoderComponent::activate(FAR ActDecCompParam *param)
 {
   char filepath[64];
   uint32_t decoder_dsp_version;
 
   DECODER_DBG("ACT: codec %d\n", param);
 
-  switch (param)
+  switch (param->codec)
     {
       case AudCodecMP3:
-        snprintf(filepath, sizeof(filepath), "%s/MP3DEC", path);
+        snprintf(filepath, sizeof(filepath), "%s/MP3DEC", param->path);
         decoder_dsp_version = DSP_MP3DEC_VERSION;
         break;
 
       case AudCodecLPCM:
-        snprintf(filepath, sizeof(filepath), "%s/WAVDEC", path);
+        snprintf(filepath, sizeof(filepath), "%s/WAVDEC", param->path);
         decoder_dsp_version = DSP_WAVDEC_VERSION;
         break;
 
       case AudCodecAAC:
-        snprintf(filepath, sizeof(filepath), "%s/AACDEC", path);
+        snprintf(filepath, sizeof(filepath), "%s/AACDEC", param->path);
         decoder_dsp_version = DSP_AACDEC_VERSION;
         break;
 
       case AudCodecOPUS:
-        snprintf(filepath, sizeof(filepath), "%s/OPUSDEC", path);
+        snprintf(filepath, sizeof(filepath), "%s/OPUSDEC", param->path);
         decoder_dsp_version = DSP_OPUSDEC_VERSION;
         break;
 
@@ -516,7 +581,7 @@ uint32_t DecoderComponent::activate(AudioCodec param,
 
   /* Load DSP */
 
-  int ret = DD_Load(filepath, cbRcvDspRes, (void*)this, &m_dsp_handler);
+  int ret = DD_Load(filepath, cbRcvDspRes, (void*)this, &m_dsp_handler, DspBinTypeELFwoBind);
 
 #ifdef CONFIG_CPUFREQ_RELEASE_LOCK
   up_pm_release_freqlock(&g_decode_hvlock);
@@ -524,24 +589,66 @@ uint32_t DecoderComponent::activate(AudioCodec param,
 
   if (ret != DSPDRV_NOERROR)
     {
-      _err("DD_Load() failure. %d\n", ret);
+      logerr("DD_Load() failure. %d\n", ret);
       DECODER_ERR(AS_ATTENTION_SUB_CODE_DSP_LOAD_ERROR);
       return AS_ECODE_DSP_LOAD_ERROR;
     }
 
-  if (!dsp_boot_check(m_apu_mid, decoder_dsp_version, dsp_inf))
+  /* wait for DSP boot up... */
+
+  dsp_boot_check(m_apu_mid, param->dsp_inf);
+
+  /* DSP version check */
+
+  bool is_version_matched = true;
+  if (decoder_dsp_version != DSP_VERSION_GET_VER(*param->dsp_inf))
     {
+      is_version_matched = false;
+      logerr("DSP version unmatch. expect %08x / actual %08x",
+              decoder_dsp_version, DSP_VERSION_GET_VER(*param->dsp_inf));
+
       DECODER_ERR(AS_ATTENTION_SUB_CODE_DSP_VERSION_ERROR);
+    }
 
-      ret = DD_Unload(m_dsp_handler);
+  /* If the sampling rate is Hi-Res and bit_length is 24 bits,
+   * load the SRC slave DSP.
+   */
 
+  if (param->dsp_multi_core)
+    {
+      ret = DD_Load(filepath, cbRcvDspRes, (void*)this, &m_dsp_slave_handler, DspBinTypeELFwoBind);
       if (ret != DSPDRV_NOERROR)
         {
-          _err("DD_UnLoad() failure. %d\n", ret);
-          DECODER_ERR(AS_ATTENTION_SUB_CODE_DSP_UNLOAD_ERROR);
+          logerr("DD_Load(%s) failure. %d\n", filepath, ret);
+          DECODER_ERR(AS_ATTENTION_SUB_CODE_DSP_LOAD_ERROR);
+          return AS_ECODE_DSP_LOAD_ERROR;
         }
 
-      return AS_ECODE_DSP_VERSION_ERROR;
+      /* Wait for slave DSP boot up... */
+
+      uint32_t slave_dsp_inf;
+      dsp_boot_check(m_apu_mid, &slave_dsp_inf);
+
+      /* Slave DSP version check */
+
+      if (decoder_dsp_version != DSP_VERSION_GET_VER(slave_dsp_inf))
+        {
+          logerr("Slave DSP version unmatch. expect %08x / actual %08x",
+                  decoder_dsp_version, DSP_VERSION_GET_VER(slave_dsp_inf));
+
+          if (!is_version_matched)
+            {
+              DECODER_FATAL(AS_ATTENTION_SUB_CODE_DSP_VERSION_ERROR);
+            }
+          else
+            {
+              DECODER_ERR(AS_ATTENTION_SUB_CODE_DSP_VERSION_ERROR);
+            }
+        }
+
+      /* Get slave DSP's cpu id to notify to master's DSP. */
+
+      m_slave_cpu_id = DSP_VERSION_GET_CPU_ID(slave_dsp_inf);
     }
 
   DECODER_INF(AS_ATTENTION_SUB_CODE_DSP_LOAD_DONE);
@@ -550,6 +657,7 @@ uint32_t DecoderComponent::activate(AudioCodec param,
   memset(&m_debug_log_info, 0, sizeof(m_debug_log_info));
 #endif
 
+  
   return AS_ECODE_OK;
 }
 
@@ -572,9 +680,26 @@ bool DecoderComponent::deactivate(void)
 
   if (ret != DSPDRV_NOERROR)
     {
-      _err("DD_UnLoad() failure. %d\n", ret);
+      logerr("DD_UnLoad() failure. %d\n", ret);
       DECODER_ERR(AS_ATTENTION_SUB_CODE_DSP_UNLOAD_ERROR);
       result = false;
+    }
+
+  /* Unload if there is Slave dsp. */
+
+  if ((m_dsp_slave_handler != NULL) && result)
+    {
+      ret = DD_Unload(m_dsp_slave_handler);
+      if (ret != DSPDRV_NOERROR)
+        {
+          logerr("DD_UnLoad() failure on slave dsp. %d\n", ret);
+          DECODER_ERR(AS_ATTENTION_SUB_CODE_DSP_UNLOAD_ERROR);
+          result = false;
+        }
+      else
+        {
+          m_dsp_slave_handler = NULL;
+        }
     }
 
   DECODER_INF(AS_ATTENTION_SUB_CODE_DSP_UNLOAD_DONE);

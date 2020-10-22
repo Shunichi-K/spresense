@@ -34,23 +34,20 @@
  ****************************************************************************/
 
 #include <arch/chip/backuplog.h>
+#include <sdk/debug.h>
 
 #include "components/filter/src_filter_component.h"
 #include "apus/cpuif_cmd.h"
 
 #include "memutils/message/Message.h"
 #include "memutils/message/MsgPacket.h"
-#include "common/audio_internal_message_types.h"
 
-#include "debug/dbg_log.h"
 #include "apus/dsp_audio_version.h"
 #include "wien2_internal_packet.h"
 
 #define DBG_MODULE DBG_MODULE_AS
 
 __WIEN2_BEGIN_NAMESPACE
-
-static SRCComponent *sp_src_component = NULL;
 
 #define DSP_CORE_OF_SRC 3
 
@@ -60,12 +57,6 @@ static SRCComponent *sp_src_component = NULL;
 void src_filter_dsp_done_callback(void *p_response, void *p_instance)
 {
   DspDrvComPrm_t *p_param = (DspDrvComPrm_t *)p_response;
-
-  if (sp_src_component == NULL)
-    {
-      FILTER_ERR(AS_ATTENTION_SUB_CODE_RESOURCE_ERROR);
-      return;
-    };
 
   switch (p_param->process_mode)
     {
@@ -95,10 +86,7 @@ void src_filter_dsp_done_callback(void *p_response, void *p_instance)
           break;
 
       case Apu::FilterMode:
-        if (!sp_src_component->recv_apu(p_param))
-          {
-            return;
-          }
+        ((SRCComponent*)p_instance)->recv_apu(p_param);
         break;
 
       default:
@@ -110,44 +98,41 @@ void src_filter_dsp_done_callback(void *p_response, void *p_instance)
 /*--------------------------------------------------------------------*/
 /* Methods of SRCComponent class */
 /*--------------------------------------------------------------------*/
-uint32_t SRCComponent::activate_apu(SRCComponent *p_component,
-                                    const char *path,
-                                    uint32_t *dsp_inf)
+uint32_t SRCComponent::activate(ComponentCallback callback,
+                                const char *dsp_name,
+                                void *p_requester,
+                                uint32_t *dsp_inf)
 {
-  char filepath[64];
   FILTER_DBG("ACT SRC:\n");
 
-  sp_src_component = p_component;
+  m_p_requester = p_requester;
+  m_callback = callback;
 
-  snprintf(filepath, sizeof(filepath), "%s/SRC", path);
-
-  int ret = DD_Load(filepath,
+  int ret = DD_Load(dsp_name,
                     src_filter_dsp_done_callback,
                     (void *)this,
-                    &m_dsp_handler);
+                    &m_dsp_handler,
+                    DspBinTypeELFwoBind);
   
   if (ret != DSPDRV_NOERROR)
     {
-      _err("DD_Load() failure. %d\n", ret);
+      logerr("DD_Load() failure. %d\n", ret);
       FILTER_ERR(AS_ATTENTION_SUB_CODE_DSP_LOAD_ERROR);
       return AS_ECODE_DSP_LOAD_ERROR;
     }
 
   /* wait for DSP boot up */
 
-  if (!dsp_boot_check(m_apu_dtq, DSP_SRC_VERSION, dsp_inf))
+  dsp_boot_check(m_apu_dtq, dsp_inf);
+
+  /* DSP version check */
+
+  if (DSP_SRC_VERSION != *dsp_inf)
     {
+      logerr("DSP version unmatch. expect %08x / actual %08x",
+              DSP_SRC_VERSION, *dsp_inf);
+
       FILTER_ERR(AS_ATTENTION_SUB_CODE_DSP_VERSION_ERROR);
-
-      ret = DD_Unload(m_dsp_handler);
-
-      if (ret != DSPDRV_NOERROR)
-        {
-          _err("DD_UnLoad() failure. %d\n", ret);
-          FILTER_ERR(AS_ATTENTION_SUB_CODE_DSP_UNLOAD_ERROR);
-        }
-
-      return AS_ECODE_DSP_VERSION_ERROR;
     }
 
   FILTER_INF(AS_ATTENTION_SUB_CODE_DSP_LOAD_DONE);
@@ -160,7 +145,7 @@ uint32_t SRCComponent::activate_apu(SRCComponent *p_component,
 }
 
 /*--------------------------------------------------------------------*/
-bool SRCComponent::deactivate_apu(void)
+bool SRCComponent::deactivate(void)
 {
   FILTER_DBG("DEACT SRC:\n");
 
@@ -175,7 +160,7 @@ bool SRCComponent::deactivate_apu(void)
 
   if (ret != DSPDRV_NOERROR)
     {
-      _err("DD_UnLoad() failure. %d\n", ret);
+      logerr("DD_UnLoad() failure. %d\n", ret);
       FILTER_ERR(AS_ATTENTION_SUB_CODE_DSP_UNLOAD_ERROR);
       return false;
     }
@@ -186,17 +171,28 @@ bool SRCComponent::deactivate_apu(void)
 }
 
 /*--------------------------------------------------------------------*/
-uint32_t SRCComponent::init_apu(InitSRCParam param, uint32_t *dsp_inf)
+uint32_t SRCComponent::init(const InitComponentParam& param)
 {
-  Apu::Wien2ApuCmd* p_apu_cmd =
-    static_cast<Apu::Wien2ApuCmd*>(getApuCmdBuf());
+  ApuReqData reqdata;
+
+  /* Allocate memhanle for APU cmd. */
+
+  if (reqdata.cmd_mh.allocSeg(m_apu_pool_id,
+                              sizeof(Apu::Wien2ApuCmd))
+      != ERR_OK)
+    {
+      return AS_ECODE_CHECK_MEMORY_POOL_ERROR;
+    }
+
+  Apu::Wien2ApuCmd *p_apu_cmd =
+    static_cast<Apu::Wien2ApuCmd*>(reqdata.cmd_mh.getPa());
 
   FILTER_DBG("INIT SRC: sample num %d, fs <in %d/out %d>, "
              "byte len <in %d/out %d>, ch num %d\n",
-             param.sample_num, param.input_sampling_rate,
-             param.output_sampling_rate,
-             param.input_pcm_byte_length,
-             param.output_pcm_byte_length, param.channel_num);
+             param.fixparam.samples, param.fixparam.in_fs,
+             param.fixparam.out_fs,
+             param.fixparam.in_bitlength,
+             param.fixparam.out_bitlength, param.fixparam.ch_num);
 
   if (p_apu_cmd == NULL)
     {
@@ -208,16 +204,16 @@ uint32_t SRCComponent::init_apu(InitSRCParam param, uint32_t *dsp_inf)
   p_apu_cmd->header.event_type   = Apu::InitEvent;
 
   p_apu_cmd->init_filter_cmd.filter_type = Apu::SRC;
-  p_apu_cmd->init_filter_cmd.channel_num = param.channel_num;
-  p_apu_cmd->init_filter_cmd.sample      = param.sample_num;
+  p_apu_cmd->init_filter_cmd.channel_num = param.fixparam.ch_num;
+  p_apu_cmd->init_filter_cmd.sample      = param.fixparam.samples;
 
   /* cut_off, attenuation parameter is set to recommended value of SRC library */
 
   p_apu_cmd->init_filter_cmd.init_src_param.input_sampling_rate  =
-    param.input_sampling_rate;
+    param.fixparam.in_fs;
 
   p_apu_cmd->init_filter_cmd.init_src_param.output_sampling_rate =
-    param.output_sampling_rate;
+    param.fixparam.out_fs;
 
   p_apu_cmd->init_filter_cmd.init_src_param.cut_off =
     SRC_CUT_OFF;
@@ -226,10 +222,10 @@ uint32_t SRCComponent::init_apu(InitSRCParam param, uint32_t *dsp_inf)
     SRC_ATTENUATION;
 
   p_apu_cmd->init_filter_cmd.init_src_param.in_word_len =
-    param.input_pcm_byte_length;
+    param.fixparam.in_bitlength / 8 /* bit -> byte */;
 
   p_apu_cmd->init_filter_cmd.init_src_param.out_word_len =
-    param.output_pcm_byte_length;
+    param.fixparam.out_bitlength / 8 /* bit -> byte */;
 
   p_apu_cmd->init_filter_cmd.debug_dump_info.addr = NULL;
   p_apu_cmd->init_filter_cmd.debug_dump_info.size = 0;
@@ -264,19 +260,77 @@ uint32_t SRCComponent::init_apu(InitSRCParam param, uint32_t *dsp_inf)
 
   send_apu(p_apu_cmd);
 
-  uint32_t rst = dsp_init_check(m_apu_dtq, dsp_inf);
+  /* Hold memhanle for APU cmd. */
+
+  if (!m_apu_req_que.push(reqdata))
+    {
+      return AS_ECODE_QUEUE_OPERATION_ERROR;
+    }
+
+  /* Wait init completion and receive reply information */
+
+  Apu::InternalResult internal_result;
+  uint32_t rst = dsp_init_check<Apu::InternalResult>(m_apu_dtq, &internal_result);
 
   return rst;
 }
 
 /*--------------------------------------------------------------------*/
-bool SRCComponent::exec_apu(ExecSRCParam param)
+bool SRCComponent::set(const SetComponentParam& param)
 {
+  /* Hold dummy */
+
+  ApuReqData dummy;
+
+  if (!m_apu_req_que.push(dummy))
+    {
+      return false;
+    }
+
+  /* Call reply callback function */
+
+  ComponentCbParam cbparam;
+
+  cbparam.event_type = ComponentSet;
+  
+  m_callback(&cbparam, m_p_requester);
+
+  return true;
+}
+
+/*--------------------------------------------------------------------*/
+bool SRCComponent::exec(const ExecComponentParam& param)
+{
+  ApuReqData reqdata;
+
+  /* Allocate memhanle for APU cmd. */
+
+  if (reqdata.cmd_mh.allocSeg(m_apu_pool_id,
+                              sizeof(Apu::Wien2ApuCmd))
+      != ERR_OK)
+    {
+      FILTER_ERR(AS_ATTENTION_SUB_CODE_MEMHANDLE_ALLOC_ERROR);
+      return false;
+    }
+
+  reqdata.input     = param.input;
+  reqdata.output_mh = param.output_mh;
+
   Apu::Wien2ApuCmd* p_apu_cmd =
-    static_cast<Apu::Wien2ApuCmd*>(getApuCmdBuf());
+    static_cast<Apu::Wien2ApuCmd*>(reqdata.cmd_mh.getPa());
 
   if (p_apu_cmd == NULL)
     {
+      FILTER_ERR(AS_ATTENTION_SUB_CODE_MEMHANDLE_ALLOC_ERROR);
+      return false;
+    }
+
+  /* Filter data area check */
+
+  if ((param.input.mh.getPa() == NULL)
+   || (param.output_mh.getPa() == NULL))
+    {
+      FILTER_ERR(AS_ATTENTION_SUB_CODE_UNEXPECTED_PARAM);
       return false;
     }
 
@@ -286,23 +340,58 @@ bool SRCComponent::exec_apu(ExecSRCParam param)
   p_apu_cmd->header.process_mode = Apu::FilterMode;
   p_apu_cmd->header.event_type   = Apu::ExecEvent;
 
-  p_apu_cmd->exec_filter_cmd.filter_type   = Apu::SRC;
-  p_apu_cmd->exec_filter_cmd.input_buffer  = param.input_buffer;
-  p_apu_cmd->exec_filter_cmd.output_buffer = param.output_buffer;
+  p_apu_cmd->exec_filter_cmd.filter_type = Apu::SRC;
+  p_apu_cmd->exec_filter_cmd.input_buffer.size      =
+    param.input.size;
+  p_apu_cmd->exec_filter_cmd.input_buffer.p_buffer  =
+    static_cast<unsigned long *>(param.input.mh.getPa());
+  p_apu_cmd->exec_filter_cmd.output_buffer.size     =
+    param.output_mh.getSize();
+  p_apu_cmd->exec_filter_cmd.output_buffer.p_buffer =
+    static_cast<unsigned long *>(param.output_mh.getPa());
 
   send_apu(p_apu_cmd);
+
+  /* Hold memhanle for APU cmd, input data, and output data. */
+
+  if (!m_apu_req_que.push(reqdata))
+    {
+      FILTER_ERR(AS_ATTENTION_SUB_CODE_QUEUE_PUSH_ERROR);
+      return false;
+    }
 
   return true;
 }
 
 /*--------------------------------------------------------------------*/
-bool SRCComponent::flush_apu(StopSRCParam param)
+bool SRCComponent::flush(const FlushComponentParam& param)
 {
+  /* Regardless of output buffer is not allocated, send Flush Request
+   * to DSP. Because it is needed by DSP to finish process correctly.
+   */
+
+  FILTER_DBG("FLUSH SRC:\n");
+
+  ApuReqData reqdata;
+
+  /* Allocate memhanle for APU cmd. */
+
+  if (reqdata.cmd_mh.allocSeg(m_apu_pool_id,
+                              sizeof(Apu::Wien2ApuCmd))
+      != ERR_OK)
+    {
+      FILTER_ERR(AS_ATTENTION_SUB_CODE_MEMHANDLE_ALLOC_ERROR);
+      return false;
+    }
+
+  reqdata.output_mh = param.output_mh;
+
   Apu::Wien2ApuCmd* p_apu_cmd =
-    static_cast<Apu::Wien2ApuCmd*>(getApuCmdBuf());
+    static_cast<Apu::Wien2ApuCmd*>(reqdata.cmd_mh.getPa());
 
   if (p_apu_cmd == NULL)
     {
+      FILTER_ERR(AS_ATTENTION_SUB_CODE_MEMHANDLE_ALLOC_ERROR);
       return false;
     }
 
@@ -312,11 +401,21 @@ bool SRCComponent::flush_apu(StopSRCParam param)
   p_apu_cmd->header.process_mode = Apu::FilterMode;
   p_apu_cmd->header.event_type   = Apu::FlushEvent;
 
-  p_apu_cmd->flush_filter_cmd.filter_type                 = Apu::SRC;
-  p_apu_cmd->flush_filter_cmd.flush_src_cmd.output_buffer =
-    param.output_buffer;
+  p_apu_cmd->flush_filter_cmd.filter_type = Apu::SRC;
+  p_apu_cmd->flush_filter_cmd.flush_src_cmd.output_buffer.size =
+    param.output_mh.getSize();
+  p_apu_cmd->flush_filter_cmd.flush_src_cmd.output_buffer.p_buffer =
+    static_cast<unsigned long *>(param.output_mh.getPa());
 
   send_apu(p_apu_cmd);
+
+  /* Hold memhanle for APU cmd and output data. */
+
+  if (!m_apu_req_que.push(reqdata))
+    {
+      FILTER_ERR(AS_ATTENTION_SUB_CODE_QUEUE_PUSH_ERROR);
+      return false;
+    }
 
   return true;
 }
@@ -324,21 +423,97 @@ bool SRCComponent::flush_apu(StopSRCParam param)
 /*--------------------------------------------------------------------*/
 bool SRCComponent::recv_apu(DspDrvComPrm_t *p_param)
 {
+  D_ASSERT(DSP_COM_DATA_TYPE_STRUCT_ADDRESS == p_param->type);
+
   Apu::Wien2ApuCmd* packet =
     static_cast<Apu::Wien2ApuCmd*>(p_param->data.pParam);
 
   if (Apu::ApuExecOK != packet->result.exec_result)
     {
-      FILTER_ERR(AS_ATTENTION_SUB_CODE_DSP_EXEC_ERROR);
+      FILTER_WARN(AS_ATTENTION_SUB_CODE_DSP_EXEC_ERROR);
     }
 
   if (Apu::InitEvent == packet->header.event_type)
     {
-      dsp_init_complete(m_apu_dtq, packet);
+      /* Notify init completion to myself */
+
+      Apu::InternalResult internal_result = packet->result.internal_result[0];
+      dsp_init_complete<Apu::InternalResult>(m_apu_dtq, packet->result.exec_result, &internal_result);
       return true;
     }
 
-  return m_callback(p_param);
+  /* Struct callback parameters. */
+
+  ComponentCbParam cbpram;
+
+  switch (packet->header.event_type)
+    {
+      case Apu::InitEvent:
+        cbpram.event_type = ComponentInit;
+        break;
+
+      case Apu::ExecEvent:
+        cbpram.event_type = ComponentExec;
+        break;
+
+      case Apu::FlushEvent:
+        cbpram.event_type = ComponentFlush;
+        break;
+
+      default:
+        cbpram.event_type = ComponentInit;
+        break;
+    }
+
+  cbpram.result = (Apu::ApuExecOK == packet->result.exec_result) ? true : false;
+
+  return m_callback(&cbpram, m_p_requester);
+}
+
+/*--------------------------------------------------------------------*/
+bool SRCComponent::recv_done(ComponentCmpltParam *cmplt)
+{
+  Apu::Wien2ApuCmd* p_apu_cmd =
+    static_cast<Apu::Wien2ApuCmd *>(m_apu_req_que.top().cmd_mh.getPa());
+
+  /* Set output pcm parameters (even if is not there) */
+
+  cmplt->output          = m_apu_req_que.top().input;
+  cmplt->output.mh       = m_apu_req_que.top().output_mh;
+  cmplt->output.size     = (p_apu_cmd->header.event_type == Apu::ExecEvent) ?
+                             p_apu_cmd->exec_filter_cmd.output_buffer.size :
+                             p_apu_cmd->flush_filter_cmd.flush_src_cmd.output_buffer.size;
+  cmplt->output.is_valid = (p_apu_cmd->result.exec_result == Apu::ApuExecOK) ? true : false;
+
+  /* Set result */
+
+  cmplt->result = (p_apu_cmd->result.exec_result == Apu::ApuExecOK) ? true : false;
+
+  if (!m_apu_req_que.pop())
+    {
+      FILTER_ERR(AS_ATTENTION_SUB_CODE_QUEUE_POP_ERROR);
+      return false;
+    }
+
+  return true;
+}
+
+/*--------------------------------------------------------------------*/
+bool SRCComponent::recv_done(ComponentInformParam *info)
+{
+  return recv_done();
+}
+
+/*--------------------------------------------------------------------*/
+bool SRCComponent::recv_done(void)
+{
+  if (!m_apu_req_que.pop())
+    {
+      FILTER_ERR(AS_ATTENTION_SUB_CODE_QUEUE_POP_ERROR);
+      return false;
+    }
+
+  return true;
 }
 
 /*--------------------------------------------------------------------*/
@@ -355,11 +530,12 @@ void SRCComponent::send_apu(Apu::Wien2ApuCmd *p_cmd)
 
   if (ret != DSPDRV_NOERROR)
     {
-      _err("DD_SendCommand() failure. %d\n", ret);
+      logerr("DD_SendCommand() failure. %d\n", ret);
       FILTER_ERR(AS_ATTENTION_SUB_CODE_DSP_SEND_ERROR);
       return;
     }
 }
+
 
 __WIEN2_END_NAMESPACE
 

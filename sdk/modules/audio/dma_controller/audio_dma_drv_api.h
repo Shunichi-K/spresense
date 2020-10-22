@@ -36,7 +36,7 @@
 #ifndef __MODULES_AUDIO_DMA_CONTROLLER_BCA_DRV_H
 #define __MODULES_AUDIO_DMA_CONTROLLER_BCA_DRV_H
 
-#include <arch/chip/cxd56_audio.h>
+#include <arch/chip/audio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -234,6 +234,8 @@ typedef enum
   AS_DMA_STATE_PREPARE,  /* PREPARE */
   AS_DMA_STATE_RUN,      /* RUN */
   AS_DMA_STATE_FLUSH,    /* FLUSH */
+  AS_DMA_STATE_ERROR,    /* ERROR */
+  AS_DMA_STATE_TERMINATE,/* TERMINATE */
   AS_DMA_STATE_MAX_ENTRY /* MAX ENTRY */
 } asDmaState;
 

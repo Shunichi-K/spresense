@@ -36,7 +36,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "wav_containerformat_parser.h"
+#include "audio/utilities/wav_containerformat_parser.h"
 
 /*--------------------------------------------------------------------------*/
 handel_wav_parser WavContainerFormatParser::parseChunk(const char* file_path,
@@ -130,6 +130,10 @@ handel_wav_parser WavContainerFormatParser::parseChunk(const char* file_path,
             }
         }
     }
+
+  fclose(fd);
+  free((void *)wav_parser);
+
   return NULL;
 }
 

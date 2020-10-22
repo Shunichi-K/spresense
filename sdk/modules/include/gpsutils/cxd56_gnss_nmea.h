@@ -1,7 +1,7 @@
 /****************************************************************************
  * modules/include/gpsutils/cxd56_gnss_nmea.h
  *
- *   Copyright 2018 Sony Semiconductor Solutions Corporation
+ *   Copyright 2018,2019 Sony Semiconductor Solutions Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -63,7 +63,7 @@ extern "C" {
 
 /** Maximum length of one line of NMEA sentence output from this library */
 
-#define NMEA_SENTENCE_MAX_LEN  120
+#define NMEA_SENTENCE_MAX_LEN  160
 
 /** Structure of callback functions to manage buffer and output NMEA sentences */
 
@@ -114,8 +114,8 @@ int NMEA_RegistOutputFunc(FAR const NMEA_OUTPUT_CB *func);
  * ___
  * ### Mask description
  *
- * - Defult value 0x000000ef.
- * - bit8 to bit31 are reserved.
+ * - Default value 0x000000ef.
+ * - Bits not listed below are reserved.
  *
  * |bit |sentence|
  * |:----:|:---:|
@@ -127,6 +127,7 @@ int NMEA_RegistOutputFunc(FAR const NMEA_OUTPUT_CB *func);
  * |bit5|RMC|
  * |bit6|VTG|
  * |bit7|ZDA|
+ * |bit14|QZQSM|
  *
  */
 
@@ -148,6 +149,23 @@ uint32_t NMEA_GetMask(void);
 
 uint16_t NMEA_Output(FAR const struct cxd56_gnss_positiondata_s* pposdat);
 
+/*
+ * Output QZSS Satellite Report sentence for Disaster and Crisis Management(DC Report)
+ * @param[in] dcrdat : QZSS DC report data
+ * @retval >0 : success, output total sentence size
+ * @retval <0 : fail
+ */
+uint16_t NMEA_DcReport_Output(const struct cxd56_gnss_dcreport_data_s* dcrdat);
+
+/*
+ * Output GAL SAR/RLM sentence
+ * @param[in] dat : Galileo SAR/RLM data
+ * @retval >0 : success, output total sentence size
+ * @retval <0 : fail
+ */
+
+uint16_t NMEA_GalSarRlm_Output(const struct cxd56_gnss_gal_sarrlm_s* dat);
+
 /**
  * Output Spectrum data as TEXT sentence
  * @param[in] spectrumdat : Spectrum data output from GNSS
@@ -158,7 +176,7 @@ uint16_t NMEA_Output(FAR const struct cxd56_gnss_positiondata_s* pposdat);
 uint16_t NMEA_OutputSpectrum(FAR NMEA_SPECTRUM_DATA *spectrumdat);
 
 /*
- * Extract raw data from postion data
+ * Extract raw data from position data
  * @param[in] pposdat : Position data output from GNSS
  * @param[out] rawdat : Extracted raw data
  * @retval 0 : success

@@ -38,6 +38,7 @@
 import os
 import sys
 import re
+import shutil
 
 TOOL_DESCRIPTION = '''
 Create a new application directory at the outside of sdk repository
@@ -45,14 +46,7 @@ Create a new application directory at the outside of sdk repository
 This tool must be run on sdk directory.
 '''
 
-TEMPLATENAME = 'examples'
-
-def replaced_copy(srcfile, dstfile, appname):
-    with open(srcfile, 'r') as src:
-        with open(dstfile, 'w') as dst:
-            for line in src:
-                l = line.replace(TEMPLATENAME, appname)
-                dst.write(l)
+REFERENCE = 'examples'
 
 if __name__ == '__main__':
 
@@ -63,14 +57,26 @@ if __name__ == '__main__':
     parser.add_argument('dirname', metavar='<dir name>', type=str,
                         help='New application directory name')
     parser.add_argument('desc', type=str, nargs="?", help='Menu description')
+    parser.add_argument('-f', '--force', action='store_true', default=False,
+                        help='force to create application directory')
     parser.add_argument('-v', '--verbose', action='count', default=0,
                         help='verbose messages')
     opts = parser.parse_args()
 
     verbose = opts.verbose
 
-    srcdir = os.path.join('..', TEMPLATENAME)
-    targetdir = os.path.join('..', opts.dirname)
+    sdkdir = os.path.abspath(os.path.join(sys.argv[0], '..', '..'))
+    srcdir = os.path.join(sdkdir, '..', REFERENCE)
+
+    #
+    # The target directory strategy is:
+    # 1. absolute path or relative path => use them
+    # 2. just a name => sibling of sdk directory
+    #
+    if opts.dirname.startswith('/') or opts.dirname.startswith('.'):
+        targetdir = opts.dirname
+    else:
+        targetdir = os.path.join(sdkdir, '..', opts.dirname)
 
     # Sanity checks
 
@@ -85,19 +91,20 @@ if __name__ == '__main__':
     try:
         os.mkdir(targetdir)
     except:
-        print('%s already exists' % targetdir, file=sys.stderr)
-        sys.exit(3)
+        if not opts.force:
+            print('%s already exists' % targetdir, file=sys.stderr)
+            sys.exit(3)
 
     # Required files for extending application series to outside of sdk repos.
 
-    filelist = ['LibTarget.mk', 'Makefile', 'Make.defs', 'Application.mk', '.gitignore']
+    filelist = ['Makefile', 'Make.defs', '.gitignore', '.sdksubdir']
 
     for f in filelist:
         src = os.path.join(srcdir, f)
         dst = os.path.join(targetdir, f)
         if verbose > 0:
             print('Copying file %s -> %s' % (src, dst))
-        replaced_copy(src, dst, opts.dirname)
+        shutil.copyfile(src, dst)
 
     # Finally, replace menu description
 

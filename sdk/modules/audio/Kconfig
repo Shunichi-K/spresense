@@ -3,6 +3,8 @@
 # see the file kconfig-language.txt in the NuttX tools repository.
 #
 
+menu "SDK Audio"
+
 config SDK_AUDIO
 	bool "SDK audio"
 	default n
@@ -13,25 +15,25 @@ if SDK_AUDIO
 
 menu "Audio Utilities"
 
-source "$SDKDIR/modules/audio/manager/Kconfig"
+source "$APPSDIR/../modules/audio/manager/Kconfig"
 
 config AUDIOUTILS_PLAYER
 	bool "Audio Player"
 	default n
-	select AUDIOUTILS_MANAGER
 	select MEMUTILS_MEMORY_MANAGER
 	select MEMUTILS_MESSAGE
 	select MEMUTILS_S_STL
 	select MEMUTILS_SIMPLE_FIFO
+	select AUDIOUTILS_OUTPUTMIXER
 	select AUDIOUTILS_DECODER
-	select AUDIOUTILS_POSTFILTER
+	select AUDIOUTILS_FILTER
 	select AUDIOUTILS_RENDERER
 	select AUDIOUTILS_DSP_DRIVER
 	---help---
 		Support Player Feature
 
 if AUDIOUTILS_PLAYER
-source "$SDKDIR/modules/audio/playlist/Kconfig"
+source "$APPSDIR/../modules/audio/playlist/Kconfig"
 
 menu "Audio Player Supported Formats"
 config AUDIOUTILS_PLAYER_CODEC_PCM
@@ -66,7 +68,7 @@ config AUDIOUTILS_RECORDER
 	bool "Audio Recorder"
 	default n
 	select AUDIOUTILS_SRC
-	select AUDIOUTILS_MANAGER
+	select AUDIOUTILS_MFE
 	select MEMUTILS_MEMORY_MANAGER
 	select MEMUTILS_MESSAGE
 	select MEMUTILS_S_STL
@@ -82,7 +84,6 @@ config AUDIOUTILS_DIAG
 	bool "Audio Diag"
 	depends on CXD56_I2S0
 	default n
-	select AUDIOUTILS_MANAGER
 	select MEMUTILS_MEMORY_MANAGER
 	select MEMUTILS_MESSAGE
 	select MEMUTILS_S_STL
@@ -96,7 +97,6 @@ config AUDIOUTILS_VOICE_CALL
 	default n
 	select AUDIOUTILS_MFE
 	select AUDIOUTILS_MPP
-	select AUDIOUTILS_MANAGER
 	select MEMUTILS_MEMORY_MANAGER
 	select MEMUTILS_MESSAGE
 	select MEMUTILS_S_STL
@@ -109,27 +109,35 @@ config AUDIOUTILS_VOICE_CALL
 	---help---
 		Support Voice Call Feature
 
-config AUDIOUTILS_VOICE_COMMAND
-	bool "Voice Command"
-	depends on CXD56_I2S0
+config AUDIOUTILS_SOUND_RECOGNIZER
+	bool "Sound Recognizer"
 	default n
-	select AUDIOUTILS_MFE
-	select AUDIOUTILS_MPP
-	select AUDIOUTILS_MANAGER
 	select MEMUTILS_MEMORY_MANAGER
 	select MEMUTILS_MESSAGE
 	select MEMUTILS_S_STL
 	select MEMUTILS_SIMPLE_FIFO
-	select AUDIOUTILS_RENDERER
 	select AUDIOUTILS_FILTER
 	select AUDIOUTILS_CAPTURE
 	select AUDIOUTILS_RECOGNITION
 	select AUDIOUTILS_DSP_DRIVER
-	select AUDIOUTILS_SOUND_EFFECTOR
 	---help---
 		Support Voice Command Feature
 
+config AUDIOUTILS_SYNTHESIZER
+	bool "Audio Synthesizer"
+	default n
+	select MEMUTILS_MEMORY_MANAGER
+	select MEMUTILS_MESSAGE
+	select MEMUTILS_S_STL
+	select MEMUTILS_SIMPLE_FIFO
+	select AUDIOUTILS_FILTER
+	select AUDIOUTILS_RENDERER
+	select AUDIOUTILS_DSP_DRIVER
+	---help---
+		Support Synthesizer Feature
+
 if AUDIOUTILS_RECORDER
+
 config AUDIOUTILS_SRC
 	bool "Sampling Rate Converter"
 	default n
@@ -137,21 +145,25 @@ config AUDIOUTILS_SRC
 		Enable Sampling Rate Converter filter
 endif
 
-if AUDIOUTILS_VOICE_CALL || AUDIOUTILS_VOICE_COMMAND
 config AUDIOUTILS_MFE
 	bool "Mic Front End"
 	default n
 	---help---
 		Enable Mic Front End Filter
 
+config AUDIOUTILS_OUTPUTMIXER
+	bool "Output Mixer"
+	default n
+	---help---
+		Enable Output Mixer
+
 config AUDIOUTILS_MPP
 	bool "Media Player Post"
 	default n
 	---help---
 		Enable Media Player Post Filter
-endif
 
-if AUDIOUTILS_RECORDER || AUDIOUTILS_VOICE_CALL || AUDIOUTILS_VOICE_COMMAND
+if AUDIOUTILS_RECORDER || AUDIOUTILS_VOICE_CALL || AUDIOUTILS_SOUND_RECOGNIZER
 config AUDIOUTILS_CAPTURE_CH_NUM
 	int "Audio capture channel number"
 	default 2
@@ -159,7 +171,7 @@ config AUDIOUTILS_CAPTURE_CH_NUM
 		Set number of using resorce for DMA input channel
 endif
 
-if AUDIOUTILS_PLAYER || AUDIOUTILS_VOICE_CALL || AUDIOUTILS_VOICE_COMMAND
+if AUDIOUTILS_PLAYER || AUDIOUTILS_VOICE_CALL || AUDIOUTILS_SOUND_RECOGNIZER
 config AUDIOUTILS_RENDERER_CH_NUM
 	int "Audio renderer channel number"
 	default 2
@@ -198,7 +210,7 @@ config AUDIOUTILS_ATTENTIONLOG_DISABLE
 		Disable attention log to print in console. default is [n].
 
 menu "Audio component menu"
-source "$SDKDIR/modules/audio/components/Kconfig"
+source "$APPSDIR/../modules/audio/components/Kconfig"
 endmenu
 
 config AUDIOUTILS_UNUSE_ORIGINAL_OPUS_FORMAT
@@ -209,7 +221,10 @@ config AUDIOUTILS_UNUSE_ORIGINAL_OPUS_FORMAT
 		Enable Unuse Original Opus Format
 
 config AUDIOUTILS_DSP_DRIVER
-	bool
+	bool "DSP driver"
+	default n
+	---help---
+		Enable DSP driver
 
 config AUDIOUTILS_SOUND_EFFECTOR
 	bool
@@ -217,3 +232,5 @@ config AUDIOUTILS_SOUND_EFFECTOR
 endmenu # Audio Utilities
 
 endif
+
+endmenu

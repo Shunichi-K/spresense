@@ -56,7 +56,7 @@
 /* Command definitions for mpshm_control. */
 
 #define MPC_POWERON    1        /**< Set shared memory to power on */
-#define MPC_POWEROFF   2        /**< Set shared memory to power on */
+#define MPC_POWEROFF   2        /**< Set shared memory to power off */
 #define MPC_RETENTION  3        /**< Set shared memory to retention state */
 
 /**
@@ -171,7 +171,7 @@ int mpshm_detach(mpshm_t *shm);
  *     - #MPC_POWEROFF
  *     - #MPC_RETENTION
  *
- * @param [in,out]: Arguments for @a cmd
+ * @param [in,out] buf: Arguments for @a cmd
  *
  * @return On success, mpshm_control() returns 0. On error it returns an error
  * number.

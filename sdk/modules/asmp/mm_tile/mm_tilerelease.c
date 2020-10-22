@@ -3,6 +3,7 @@
  *
  *   Copyright (C) 2012 Gregory Nutt. All rights reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
+ *   Copyright 2018 Sony Semiconductor Solutions Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -103,8 +104,11 @@ static inline void tile_release_common(FAR struct tile_s *priv)
 
 void tile_release(void)
 {
-  tile_release_common(g_tileinfo);
-  g_tileinfo = NULL;
+  if (g_tileinfo)
+    {
+      tile_release_common(g_tileinfo);
+      g_tileinfo = NULL;
+    }
 }
 
 #endif /* CONFIG_MM_TILE */

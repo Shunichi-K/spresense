@@ -7,7 +7,6 @@ Make.dep
 *~
 .swp
 .*.swp
-/.gdbinit
 /cscope.*
 /.config
 /.config.old
@@ -25,8 +24,12 @@ Make.dep
 /*.hex
 /.cproject
 /.project
+/.settings
 /pcode
 /tags
 /*.log
 .*.tmp
 .context
+/Kconfig
+.built
+sdk-export.tar.gz

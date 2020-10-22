@@ -43,7 +43,9 @@
 #include "memutils/message/Message.h"
 #include "memutils/message/MsgPacket.h"
 #include "memutils/memory_manager/MemHandle.h"
-#include "common/audio_internal_message_types.h"
+#include "audio/audio_message_types.h"
+#include "audio/audio_outputmix_api.h"
+#include "audio/audio_object_common_api.h"
 #include "output_mix_sink_device.h"
 #include "wien2_common_defs.h"
 
@@ -60,33 +62,25 @@ __WIEN2_BEGIN_NAMESPACE
 class OutputMixObjectTask
 {
 public:
-  static void create(MsgQueId self_dtq,
-                     MsgQueId dev0_apu_dtq,
-                     MsgQueId dev1_apu_dtq,
-                     MemMgrLite::PoolId dev0_pcm_pool_id,
-                     MemMgrLite::PoolId dev1_pcm_pool_id,
-                     MemMgrLite::PoolId dev0_apu_pool_id,
-                     MemMgrLite::PoolId dev1_apu_pool_id);
+  static void create(AsOutputMixMsgQueId_t msgq_id,
+                     AsOutputMixPoolId_t pool_id);
 
-  OutputMixObjectTask(MsgQueId self_dtq,
-                      MsgQueId dev0_apu_dtq,
-                      MsgQueId dev1_apu_dtq,
-                      MemMgrLite::PoolId dev0_pcm_pool_id,
-                      MemMgrLite::PoolId dev1_pcm_pool_id,
-                      MemMgrLite::PoolId dev0_apu_pool_id,
-                      MemMgrLite::PoolId dev1_apu_pool_id);
+  OutputMixObjectTask(AsOutputMixMsgQueId_t msgq_id,
+                      AsOutputMixPoolId_t pool_id);
 
 private:
-  MsgQueId m_self_dtq;
-  static const int HPI2SoutChNum = 2;
+  AsOutputMixMsgQueId_t m_msgq_id;
 
-  OutputMixToHPI2S m_output_mix_to_hpi2s[HPI2SoutChNum];
+  OutputMixToHPI2S m_output_mix_to_hpi2s_0;
+  OutputMixToHPI2S m_output_mix_to_hpi2s_1;
 
   AsOutputMixDevice m_output_device;
 
   void run();
   int getHandle(MsgPacket* msg);
   void parse(MsgPacket* msg);
+  void enableOutputDevice();
+  void disableOutputDevice();
 };
 
 /****************************************************************************

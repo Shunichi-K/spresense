@@ -33,19 +33,15 @@
 #
 ############################################################################
 
--include $(TOPDIR)/.config
 -include $(TOPDIR)/Make.defs
--include $(SDKDIR)/Make.defs
-include $(APPDIR)/Make.defs
+include $(SDKDIR)/Make.defs
 
 # Audio application info
 
-CONFIG_EXAMPLES_AUDIO_RECORDER_PRIORITY ?= SCHED_PRIORITY_DEFAULT
-CONFIG_EXAMPLES_AUDIO_RECORDER_STACKSIZE ?= 2048
-
-APPNAME   = recorder
+PROGNAME  = $(CONFIG_EXAMPLES_AUDIO_RECORDER_PROGNAME)
 PRIORITY  = $(CONFIG_EXAMPLES_AUDIO_RECORDER_PRIORITY)
 STACKSIZE = $(CONFIG_EXAMPLES_AUDIO_RECORDER_STACKSIZE)
+MODULE    = $(CONFIG_EXAMPLES_AUDIO_RECORDER)
 
 # Audio Example
 
@@ -57,17 +53,26 @@ AUDIODIR = $(SDKDIR)$(DELIM)modules$(DELIM)audio
 
 # Audio Example flags
 
-ifeq ($(WINTOOL),y)
-CXXFLAGS += -I "${shell cygpath -w $(AUDIODIR)}"
-else
-CXXFLAGS += -I $(AUDIODIR)
+CXXFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" "$(AUDIODIR)"}
+ifeq ($(CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC),y)
+CXXFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" "worker$(DELIM)userproc$(DELIM)include"}
 endif
 
 CXXFLAGS += -D_POSIX
 CXXFLAGS += -DUSE_MEMMGR_FENCE
 CXXFLAGS += -DATTENTION_USE_FILENAME_LINE
 
-CONFIG_EXAMPLES_AUDIO_RECORDER_PROGNAME ?= audio_recorder$(EXEEXT)
-PROGNAME = $(CONFIG_EXAMPLES_AUDIO_RECORDER_PROGNAME)
-
 include $(APPDIR)/Application.mk
+
+ifeq ($(CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC),y)
+
+build_worker:
+	$(Q) $(MAKE) -C worker TOPDIR="$(TOPDIR)" SDKDIR="$(SDKDIR)" APPDIR="$(APPDIR)" CROSSDEV=$(CROSSDEV)
+
+.built: build_worker
+
+clean_worker:
+	@$(MAKE) -C worker TOPDIR="$(TOPDIR)" SDKDIR="$(SDKDIR)" APPDIR="$(APPDIR)" CROSSDEV=$(CROSSDEV) clean
+	$(call DELFILE, .worker)
+
+endif

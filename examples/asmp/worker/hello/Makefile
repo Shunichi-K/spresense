@@ -51,7 +51,7 @@ BIN = hello
 
 CSRCS = $(BIN).c
 
-CELFFLAGS += -Os
+CELFFLAGS += -Og
 ifeq ($(WINTOOL),y)
 CELFFLAGS += -I"$(shell cygpath -w $(APPDIR))"
 CELFFLAGS += -I"$(shell cygpath -w $(SDKDIR)$(DELIM)modules$(DELIM)asmp$(DELIM)worker)"
@@ -62,6 +62,8 @@ endif
 
 AOBJS = $(ASRCS:.S=$(OBJEXT))
 COBJS = $(CSRCS:.c=$(OBJEXT))
+
+OBJEXT ?= .o
 
 all: $(BIN)
 
@@ -75,8 +77,8 @@ $(AOBJS): %$(OBJEXT): %.S
 
 $(BIN): $(COBJS) $(AOBJS)
 	@echo "LD: $<"
-	$(Q) $(LD) $(LDRAWELFFLAGS) $(LDLIBPATH) -o $@ $(ARCHCRT0OBJ) $^ $(LDLIBS)
-	$(Q) $(STRIP) -d $(BIN)
+	$(Q) $(LD) $(LDRAWELFFLAGS) $(LDLIBPATH) -o $@.debug $(ARCHCRT0OBJ) $^ $(LDLIBS)
+	$(Q) $(STRIP) -d -o $@ $@.debug
 
 clean:
 	$(call DELFILE, $(BIN))

@@ -33,7 +33,7 @@
  *
  ****************************************************************************/
 
-#include <sdk/config.h>
+#include <nuttx/config.h>
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -56,7 +56,7 @@
 #define _HEADER_SIZE 4
 #define _FOOTER_SIZE 4
 #define _HEADERFOOTER_SIZE (_HEADER_SIZE + _FOOTER_SIZE)
-#define _WBUF_SIZE 128
+#define _WBUF_SIZE 160
 #define _READY_POLL_FD_NUM 1
 #define _MAX_ARGC 8
 
@@ -699,6 +699,59 @@ _err:
   return ret;
 }
 
+static int command_gtcx(FAR struct gnss_atcmd_info *info,
+                        FAR struct atcmd_entry *cmdentry, FAR char *argv[],
+                        int argc)
+{
+  int     ret = -EINVAL;
+  int32_t offset;
+
+  offset = atoi(argv[1]);
+
+  ret = ioctl(info->gnssfd, CXD56_GNSS_IOCTL_SET_TCXO_OFFSET,
+              (unsigned long)offset);
+  if (ret < 0)
+    {
+      ret = -errno;
+    }
+  return ret;
+}
+
+static int command_gptc(FAR struct gnss_atcmd_info *info,
+                        FAR struct atcmd_entry *cmdentry, FAR char *argv[],
+                        int argc)
+{
+  int32_t offset;
+  int     len;
+  int     n;
+  int     ret;
+
+  ret = ioctl(info->gnssfd, CXD56_GNSS_IOCTL_GET_TCXO_OFFSET,
+              (unsigned long)&offset);
+  if (ret < 0)
+    {
+      ret = -errno;
+      goto _err;
+    }
+  len = snprintf(wbuf + _HEADER_SIZE, _WBUF_SIZE - _HEADER_SIZE,
+                 "%d\r\n", offset);
+  if (len < 0)
+    {
+      ret = len;
+      goto _err;
+    }
+  set_headfoot(wbuf, len);
+  n = write(info->wfd, wbuf, len + _HEADERFOOTER_SIZE);
+  if (n < 0)
+    {
+      ret = -errno;
+      goto _err;
+    }
+  ret = 0;
+_err:
+  return ret;
+}
+
 static int command_gte(FAR struct gnss_atcmd_info *info,
                        FAR struct atcmd_entry *cmdentry, FAR char *argv[],
                        int argc)
@@ -866,6 +919,115 @@ static int command_lals(FAR struct gnss_atcmd_info *info,
   return set_orbitaldata(info, cmdentry, &oinfo);
 }
 
+static int command_qemg(FAR struct gnss_atcmd_info *info,
+                        FAR struct atcmd_entry *cmdentry, FAR char *argv[],
+                        int argc)
+{
+  struct orbitaldata_info oinfo = {
+    CXD56_GNSS_IOCTL_GET_EPHEMERIS,
+    CXD56_GNSS_DATA_QZSSL1CA,
+    CXD56_GNSS_QZSSL1CA_EPHEMERIS_SIZE,
+  };
+
+  return get_orbitaldata(info, cmdentry, &oinfo);
+}
+
+static int command_qems(FAR struct gnss_atcmd_info *info,
+                        FAR struct atcmd_entry *cmdentry, FAR char *argv[],
+                        int argc)
+{
+  struct orbitaldata_info oinfo = {
+    CXD56_GNSS_IOCTL_SET_EPHEMERIS,
+    CXD56_GNSS_DATA_QZSSL1CA,
+    CXD56_GNSS_QZSSL1CA_EPHEMERIS_SIZE,
+  };
+
+  return set_orbitaldata(info, cmdentry, &oinfo);
+}
+
+static int command_qalg(FAR struct gnss_atcmd_info *info,
+                        FAR struct atcmd_entry *cmdentry, FAR char *argv[],
+                        int argc)
+{
+  struct orbitaldata_info oinfo = {
+    CXD56_GNSS_IOCTL_GET_ALMANAC,
+    CXD56_GNSS_DATA_QZSSL1CA,
+    CXD56_GNSS_QZSSL1CA_ALMANAC_SIZE,
+  };
+
+  return get_orbitaldata(info, cmdentry, &oinfo);
+}
+
+static int command_qals(FAR struct gnss_atcmd_info *info,
+                        FAR struct atcmd_entry *cmdentry, FAR char *argv[],
+                        int argc)
+{
+  struct orbitaldata_info oinfo = {
+    CXD56_GNSS_IOCTL_SET_ALMANAC,
+    CXD56_GNSS_DATA_QZSSL1CA,
+    CXD56_GNSS_QZSSL1CA_ALMANAC_SIZE
+  };
+
+  return set_orbitaldata(info, cmdentry, &oinfo);
+}
+
+static int command_guse(FAR struct gnss_atcmd_info *info,
+                        FAR struct atcmd_entry *cmdentry, FAR char *argv[],
+                        int argc)
+{
+  int     ret = -EINVAL;
+  uint32_t usecase;
+
+  usecase = strtoul(argv[1], NULL, 0);
+
+  ret = ioctl(info->gnssfd, CXD56_GNSS_IOCTL_SET_USECASE,
+              (unsigned long)usecase);
+  if (ret < 0)
+    {
+      ret = -errno;
+    }
+  return ret;
+}
+
+static int command_gguc(FAR struct gnss_atcmd_info *info,
+                        FAR struct atcmd_entry *cmdentry, FAR char *argv[],
+                        int argc)
+{
+  int ret;
+  uint32_t usecase;
+
+  ret = ioctl(info->gnssfd, CXD56_GNSS_IOCTL_GET_USECASE,
+              (unsigned long)&usecase);
+  if (ret < 0)
+    {
+      ret = -errno;
+    }
+  ret = gnss_atcmd_printf(info->wfd, "0x%08x\r\n", usecase);
+  if (ret >= 0)
+    {
+      ret = 0;
+    }
+  return ret;
+}
+
+static int command_gpps(FAR struct gnss_atcmd_info *info,
+                        FAR struct atcmd_entry *cmdentry, FAR char *argv[],
+                        int argc)
+{
+  int     ret = -EINVAL;
+  uint32_t enable;
+
+  enable = strtoul(argv[1], NULL, 0);
+
+  ret = ioctl(info->gnssfd, CXD56_GNSS_IOCTL_SET_1PPS_OUTPUT,
+              (unsigned long)enable);
+  if (ret < 0)
+    {
+      ret = -errno;
+    }
+  return ret;
+}
+
 static int command_ver(FAR struct gnss_atcmd_info *info,
                        FAR struct atcmd_entry *cmdentry, FAR char *argv[],
                        int argc)
@@ -912,6 +1074,7 @@ static struct atcmd_entry atcmd_entry_table[] = {
   {command_gnfs, "GNFS", 6},
 #endif /* ifdef CONFIG_EXAMPLES_GNSS_ATCMD_SUPPORT_SPECRUM */
   {command_gpoe, "GPOE", 6},
+  {command_gptc, "GPTC", 0},
   {command_gsop, "GSOP", 3},
   {command_gsp,  "GSP",  0},
   {command_gspp, "GSPP", 0},
@@ -921,6 +1084,7 @@ static struct atcmd_entry atcmd_entry_table[] = {
   {command_gsw,  "GSW",  0},
   {command_gswp, "GSWP", 0},
   {command_gtim, "GTIM", 6},
+  {command_gtcx, "GTCX", 1},
   {command_gte,  "GTE",  0},
   {command_gtr,  "GTR",  0},
   {command_gts,  "GTS",  4},
@@ -928,8 +1092,14 @@ static struct atcmd_entry atcmd_entry_table[] = {
   {command_lals, "LALS", 0},
   {command_lemg, "LEMG", 0},
   {command_lems, "LEMS", 0},
+  {command_qalg, "QALG", 0},
+  {command_qals, "QALS", 0},
+  {command_qemg, "QEMG", 0},
+  {command_qems, "QEMS", 0},
   {command_nop,  "AQCK", 1},
-  {command_nop,  "GUSE", 1},
+  {command_guse, "GUSE", 1},
+  {command_gguc, "GGUC", 0},
+  {command_gpps, "GPPS", 1},
   {command_nop,  "LEMG", 0},
   {command_nop,  "TRCK", 1},
   {command_ver,  "VER",  0},

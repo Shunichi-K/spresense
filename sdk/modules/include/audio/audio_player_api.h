@@ -33,8 +33,8 @@
  *
  ****************************************************************************/
 
-#ifndef __SONY_APPS_INCLUDE_AUDIOUTIL_AUDIO_PLAYER_API_H
-#define __SONY_APPS_INCLUDE_AUDIOUTIL_AUDIO_PLAYER_API_H
+#ifndef __MODULES_INCLUDE_AUDIO_AUDIO_PLAYER_API_H
+#define __MODULES_INCLUDE_AUDIO_AUDIO_PLAYER_API_H
 
 /**
  * @defgroup audioutils Audio Utility
@@ -58,7 +58,7 @@
 #include <stdbool.h>
 
 #include "audio/audio_common_defs.h"
-
+#include "audio/audio_object_common_api.h"
 #include "memutils/memory_manager/MemHandle.h"
 #include "memutils/message/MsgPacket.h"
 
@@ -66,8 +66,16 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
+/* Enable player feature. */
+
 #define AS_FEATURE_PLAYER_ENABLE
 
+/* Need to enable mixer feature when player feature is enabled.
+ * Because player feature always use mixer feature.
+ */
+
+#define AS_FEATURE_OUTPUTMIX_ENABLE
+  
 /** @name Packet length of player command*/
 /** @{ */
 
@@ -102,6 +110,10 @@
 /*! \brief Set audio gain leve command ("AUDCMD_SETGAIN)packet length */
 
 #define LENGTH_SET_GAIN (2)
+
+/*! \brief Send Pfcommand command ("AUDCMD_SENDPOSTCMD") packet length */
+
+#define LENGTH_SENDPOSTCMD (10)
 
 /** @} */
 
@@ -147,6 +159,8 @@ typedef enum
 
   AS_PLAYER_ID_1,
 
+  AS_PLAYER_ID_NUM,
+
 } AsPlayerId;
 
 /** Select activate player */
@@ -171,15 +185,21 @@ typedef enum
 
 typedef enum
 {
-  /*! \brief eMMC FileSystem (__not supported__) */
+  /*! \brief eMMC FileSystem
+   *  \deprecated It will be removed in the future
+   */
 
   AS_SETPLAYER_INPUTDEVICE_EMMC = 0,
 
-  /*! \brief A2DP Media Packet FIFO (__not supported__) */
+  /*! \brief A2DP Media Packet FIFO
+   *  \deprecated It will be removed in the future
+   */
 
   AS_SETPLAYER_INPUTDEVICE_A2DPFIFO,
 
-  /*! \brief I2S input (__not supported__) */
+  /*! \brief I2S input
+   *  \deprecated It will be removed in the future
+   */
 
   AS_SETPLAYER_INPUTDEVICE_I2SINPUT,
 
@@ -202,7 +222,9 @@ typedef enum
 
   AS_SETPLAYER_OUTPUTDEVICE_I2SOUTPUT,
 
-  /*! \brief A2DP Media Packet FIFO (__not supported__) */
+  /*! \brief A2DP Media Packet FIFO
+   *  \deprecated It will be removed in the future
+   */
 
   AS_SETPLAYER_OUTPUTDEVICE_A2DPFIFO,
   AS_SETPLAYER_OUTPUTDEVICE_NUM
@@ -223,23 +245,6 @@ typedef enum
   /*! \brief Forcibly stop at system failure */
   AS_STOPPLAYER_FORCIBLY = 0xFF
 } AsStopPlayerStopMode;
-
-/**< Output sound period adjustment direction */
-
-typedef enum
-{
-  /*! \brief Adjust to the + direction */
-
-  OutputMixAdvance = -1,
-
-  /*! \brief No adjust */
-
-  OutputMixNoAdjust = 0,
-
-  /*! \brief Adjust to the - direction */
-
-  OutputMixDelay = 1,
-} AsClkRecoveryDirection;
 
 /**< Decodec PCM data send path  */
 
@@ -353,17 +358,17 @@ typedef struct
 
   uint8_t  active_player;
 
+  /*! \brief [in] post DSP 0 enable */
+
+  uint8_t  post0_enable;
+
+  /*! \brief [in] post DSP 1 enable */
+
+  uint8_t  post1_enable;
+
   /*! \brief [in] reserved */
 
   uint8_t  reserve0;
-
-  /*! \brief [in] reserved */
-
-  uint8_t  reserve1;
-
-  /*! \brief [in] reserved */
-
-  uint8_t  reserve2;
 
   /*! \brief [in] Activation parameters for player0 */
 
@@ -562,20 +567,6 @@ typedef struct
   };
 } PlayerCommand;
 
-/** Request Clock Recovery Command (#AUDCMD_CLKRECOVERY) parameter */
-
-typedef struct
-{
-  /*! \brief [in] Handle of OutputMixer */
-
-  uint8_t  player_id;
-
-  int8_t   direction;
-
-  uint32_t times;
-
-} AsPlayerClockRecovery;
-
 /** Message queue ID parameter of activate function */
 
 typedef struct
@@ -603,6 +594,25 @@ typedef struct
 {
   /*! \brief [in] Memory pool id of es data */
 
+  MemMgrLite::PoolId es;
+
+  /*! \brief [in] Memory pool id of pcm data */
+
+  MemMgrLite::PoolId pcm;
+
+  /*! \brief [in] Memory pool id of dsp command data */
+
+  MemMgrLite::PoolId dsp;
+
+  /*! \brief [in] Memory pool id of src work area */
+
+  MemMgrLite::PoolId src_work;
+} AsPlayerPoolId_t;
+
+
+typedef struct{
+  /*! \brief [in] Memory pool id of es data */
+
   uint8_t es;
 
   /*! \brief [in] Memory pool id of pcm data */
@@ -612,7 +622,25 @@ typedef struct
   /*! \brief [in] Memory pool id of dsp command data */
 
   uint8_t dsp;
-} AsPlayerPoolId_t;
+
+  /*! \brief [in] Memory pool id of src work area */
+
+  uint8_t src_work;
+} AsPlayerPoolId_old_t;
+
+/** Activate function parameter */
+
+typedef struct
+{
+  /*! \brief [in] ID for sending messages to each function */
+
+  AsPlayerMsgQueId_t msgq_id;
+
+  /*! \brief [in] ID of memory pool for processing data */
+
+  AsPlayerPoolId_old_t   pool_id;
+
+} AsCreatePlayerParam_t;
 
 /** Activate function parameter */
 
@@ -625,7 +653,8 @@ typedef struct
   /*! \brief [in] ID of memory pool for processing data */
 
   AsPlayerPoolId_t   pool_id;
-} AsCreatePlayerParam_t;
+
+} AsCreatePlayerParams_t;
 
 /****************************************************************************
  * Public Data
@@ -639,10 +668,6 @@ typedef struct
  * Public Function Prototypes
  ****************************************************************************/
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 /**
  * @brief Create audio main player
  *
@@ -650,9 +675,41 @@ extern "C"
  *
  * @retval     true  : success
  * @retval     false : failure
+ * @deprecated Use AS_CreatePlayerMulti() instead.
  */
 
 bool AS_CreatePlayer(AsPlayerId id, FAR AsCreatePlayerParam_t *param);
+
+/**
+ * @brief Create audio main player using memory pool in work area of src
+ *
+ * @param[in] param: Parameters of resources used by audio main player
+ * @param[in] attcb: Attention callback of Player. NULL means no callback.
+ *
+ * @retval     true  : success
+ * @retval     false : failure
+ * @note New create interface. The use size of the heap area is small.
+ */
+
+bool AS_CreatePlayerMulti(AsPlayerId id,
+                          FAR AsCreatePlayerParam_t *param,
+                          AudioAttentionCb attcb);
+
+bool AS_CreatePlayerMulti(AsPlayerId id,
+                          FAR AsCreatePlayerParams_t *param,
+                          AudioAttentionCb attcb);
+
+__attribute__((deprecated(
+                 "\n \
+                  \n Deprecated create API is used. \
+                  \n Use \"AS_CreatePlayerMulti(AsPlayerId, \
+                  \n                           AsCreatePlayerParam_t *, \
+                  \n                           AudioAttentionCb)\". \
+                  \n \
+                  \n")))
+bool AS_CreatePlayerMulti(AsPlayerId id, FAR AsCreatePlayerParam_t *param);
+
+bool AS_CreatePlayerMulti(AsPlayerId id, FAR AsCreatePlayerParams_t *param);
 
 /**
  * @brief Activate audio (sub)player
@@ -740,12 +797,16 @@ bool AS_DeactivatePlayer(AsPlayerId id, FAR AsDeactivatePlayer *deactparam);
 
 bool AS_DeletePlayer(AsPlayerId id);
 
+/**
+ * @brief Check availability of MediaPlayer 
+ *
+ * @retval     true  : avaliable 
+ * @retval     false : Not available 
+ */
 
-#ifdef __cplusplus
-}
-#endif
+bool AS_checkAvailabilityMediaPlayer(AsPlayerId id);
 
-#endif  /* __SONY_APPS_INCLUDE_AUDIOUTIL_AUDIO_PLAYER_API_H */
+#endif  /* __MODULES_INCLUDE_AUDIO_AUDIO_PLAYER_API_H */
 /**
  * @}
  */

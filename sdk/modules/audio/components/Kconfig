@@ -15,6 +15,14 @@ config AUDIOUTILS_DECODER
 	---help---
 		Enable Decode Feature
 
+if AUDIOUTILS_DECODER
+config AUDIOUTILS_DECODER_TIME_MEASUREMENT
+	bool "Measure the decoding time and display the result"
+	default n
+	---help---
+		Enable measure the decoding time
+endif
+
 config AUDIOUTILS_ENCODER
 	bool "Encoder"
 	default n
@@ -22,20 +30,16 @@ config AUDIOUTILS_ENCODER
 		Enable Encode Feature
 
 config AUDIOUTILS_FILTER
-	bool "Fileter"
+	bool "Filter"
 	default n
+	select AUDIOUTILS_CUSTOMPROC
 	---help---
-		Enable Filtering Feature
-
-config AUDIOUTILS_POSTFILTER
-	bool "Post Filter"
-	default n
-	---help---
-		Enable Post Filtering Feature
+		Enable (Pre/Post) Filtering Feature
 
 config AUDIOUTILS_RECOGNITION
 	bool "Recognition"
 	default n
+	select AUDIOUTILS_CUSTOMPROC
 	---help---
 		Enable Recognition Feature
 
@@ -54,9 +58,11 @@ config AUDIOUTILS_RENDERER_UNDERFLOW
 
 endif
 
-config AUDIOUTILS_COMPONENT_COMMON
-	bool
-	default y if AUDIOUTILS_DECODER || AUDIOUTILS_FILTER || AUDIOUTILS_POSTFILTER
+config AUDIOUTILS_CUSTOMPROC
+	bool "User custom signal processing on DSP"
+	default n
+	---help---
+		Enable Insert silence data
 
 config AUDIOUTILS_DSP_DEBUG_DUMP
 	bool "dsp debug dump"

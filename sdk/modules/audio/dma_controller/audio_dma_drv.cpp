@@ -35,10 +35,8 @@
 
 #include <nuttx/kmalloc.h>
 #include <debug.h>
-#include <arch/chip/cxd56_audio.h>
 
 #include "memutils/os_utils/chateau_osal.h"
-#include "memutils/common_utils/common_attention.h"
 #include "audio/audio_high_level_api.h"
 #include "debug/dbg_log.h"
 #include "audio_dma_drv.h"
@@ -67,7 +65,7 @@
 extern "C" uint32_t cxd56_get_cpu_baseclk(void);
 
 #ifdef CONFIG_AUDIOUTILS_RENDERER_UNDERFLOW
-/* Underflow insertion data 
+/* Underflow insertion data
  *  (saize: sample[UNDERFLOW_DATA_SAMPLE] * bitleng[4] * channel[2])
  */
 
@@ -85,46 +83,54 @@ AsDmaDrv::dmaDrvFuncTbl AsDmaDrv::m_func_tbl[] =
       &AsDmaDrv::illegal,       /*   AS_DMA_STATE_READY   */
       &AsDmaDrv::illegal,       /*   AS_DMA_STATE_PREPARE */
       &AsDmaDrv::illegal,       /*   AS_DMA_STATE_RUN     */
-      &AsDmaDrv::illegal        /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::illegal,       /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::illegal,       /*   AS_DMA_STATE_ERROR   */
+      &AsDmaDrv::init           /*   AS_DMA_STATE_TERMINATE */
     }
   },
 
   {
     EvtRun,
 
-    {                           /* DmaController status:  */
-      &AsDmaDrv::illegal,       /*   AS_DMA_STATE_BOOTED  */
-      &AsDmaDrv::runDmaOnStop,  /*   AS_DMA_STATE_STOP    */
-      &AsDmaDrv::runDmaOnReady, /*   AS_DMA_STATE_READY   */
+    {                             /* DmaController status:  */
+      &AsDmaDrv::illegal,         /*   AS_DMA_STATE_BOOTED  */
+      &AsDmaDrv::runDmaOnStop,    /*   AS_DMA_STATE_STOP    */
+      &AsDmaDrv::runDmaOnReady,   /*   AS_DMA_STATE_READY   */
       &AsDmaDrv::runDmaOnPrepare, /*   AS_DMA_STATE_PREPARE */
       &AsDmaDrv::runDma,          /*   AS_DMA_STATE_RUN     */
-      &AsDmaDrv::illegal        /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::illegal,         /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::illegal,         /*   AS_DMA_STATE_ERROR   */
+      &AsDmaDrv::illegal          /*   AS_DMA_STATE_TERMINATE */
     }
   },
 
   {
     EvtStop,
 
-    {                           /* DmaController status:  */
-        &AsDmaDrv::illegal,     /*   AS_DMA_STATE_BOOTED  */
-        &AsDmaDrv::illegal,     /*   AS_DMA_STATE_STOP    */
-        &AsDmaDrv::stop,        /*   AS_DMA_STATE_READY   */
-        &AsDmaDrv::stop,        /*   AS_DMA_STATE_PREPARE */
-        &AsDmaDrv::stopOnRun,   /*   AS_DMA_STATE_RUN     */
-        &AsDmaDrv::illegal      /*   AS_DMA_STATE_FLUSH   */
+    {                         /* DmaController status:  */
+      &AsDmaDrv::illegal,     /*   AS_DMA_STATE_BOOTED  */
+      &AsDmaDrv::ignore,      /*   AS_DMA_STATE_STOP    */
+      &AsDmaDrv::stop,        /*   AS_DMA_STATE_READY   */
+      &AsDmaDrv::stop,        /*   AS_DMA_STATE_PREPARE */
+      &AsDmaDrv::stopOnRun,   /*   AS_DMA_STATE_RUN     */
+      &AsDmaDrv::illegal,     /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::ignore,      /*   AS_DMA_STATE_ERROR   */
+      &AsDmaDrv::stop         /*   AS_DMA_STATE_TERMINATE */
     }
   },
 
   {
     EvtCmplt,
 
-    {                            /* DmaController status:  */
-      &AsDmaDrv::illegal,        /*   AS_DMA_STATE_BOOTED  */
-      &AsDmaDrv::illegal,        /*   AS_DMA_STATE_STOP    */
-      &AsDmaDrv::illegal,        /*   AS_DMA_STATE_READY   */
-      &AsDmaDrv::illegal,        /*   AS_DMA_STATE_PREPARE */
-      &AsDmaDrv::dmaCmpltOnRun,  /*   AS_DMA_STATE_RUN     */
-      &AsDmaDrv::dmaCmpltOnFlush /*   AS_DMA_STATE_FLUSH   */
+    {                             /* DmaController status:  */
+      &AsDmaDrv::illegalDmaCmplt, /*   AS_DMA_STATE_BOOTED  */
+      &AsDmaDrv::illegalDmaCmplt, /*   AS_DMA_STATE_STOP    */
+      &AsDmaDrv::illegalDmaCmplt, /*   AS_DMA_STATE_READY   */
+      &AsDmaDrv::illegalDmaCmplt, /*   AS_DMA_STATE_PREPARE */
+      &AsDmaDrv::dmaCmpltOnRun,   /*   AS_DMA_STATE_RUN     */
+      &AsDmaDrv::dmaCmpltOnFlush, /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::dmaCmpltOnError, /*   AS_DMA_STATE_ERROR   */
+      &AsDmaDrv::illegalDmaCmplt  /*   AS_DMA_STATE_TERMINATE */
     }
   },
 
@@ -137,7 +143,9 @@ AsDmaDrv::dmaDrvFuncTbl AsDmaDrv::m_func_tbl[] =
       &AsDmaDrv::getInfo,        /*   AS_DMA_STATE_READY   */
       &AsDmaDrv::getInfo,        /*   AS_DMA_STATE_PREPARE */
       &AsDmaDrv::getInfo,        /*   AS_DMA_STATE_RUN     */
-      &AsDmaDrv::getInfo         /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::getInfo,        /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::getInfo,        /*   AS_DMA_STATE_ERROR   */
+      &AsDmaDrv::getInfo         /*   AS_DMA_STATE_TERMINATE */
     }
   },
 
@@ -150,7 +158,9 @@ AsDmaDrv::dmaDrvFuncTbl AsDmaDrv::m_func_tbl[] =
       &AsDmaDrv::dmaErrInt,      /*   AS_DMA_STATE_READY   */
       &AsDmaDrv::dmaErrInt,      /*   AS_DMA_STATE_PREPARE */
       &AsDmaDrv::dmaErrIntOnRun, /*   AS_DMA_STATE_RUN     */
-      &AsDmaDrv::dmaErrInt       /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::dmaErrInt,      /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::dmaErrInt,      /*   AS_DMA_STATE_ERROR   */
+      &AsDmaDrv::dmaErrInt       /*   AS_DMA_STATE_TERMINATE */
     }
   },
 
@@ -163,7 +173,9 @@ AsDmaDrv::dmaDrvFuncTbl AsDmaDrv::m_func_tbl[] =
       &AsDmaDrv::dmaErrBus,      /*   AS_DMA_STATE_READY   */
       &AsDmaDrv::dmaErrBus,      /*   AS_DMA_STATE_PREPARE */
       &AsDmaDrv::dmaErrBusOnRun, /*   AS_DMA_STATE_RUN     */
-      &AsDmaDrv::dmaErrBus       /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::dmaErrBus,      /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::dmaErrBus,      /*   AS_DMA_STATE_ERROR   */
+      &AsDmaDrv::dmaErrBus       /*   AS_DMA_STATE_TERMINATE */
     }
   },
 
@@ -176,7 +188,9 @@ AsDmaDrv::dmaDrvFuncTbl AsDmaDrv::m_func_tbl[] =
       &AsDmaDrv::illegal,        /*   AS_DMA_STATE_READY   */
       &AsDmaDrv::startDma,       /*   AS_DMA_STATE_PREPARE */
       &AsDmaDrv::illegal,        /*   AS_DMA_STATE_RUN     */
-      &AsDmaDrv::illegal         /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::illegal,        /*   AS_DMA_STATE_FLUSH   */
+      &AsDmaDrv::ignore,         /*   AS_DMA_STATE_ERROR   */
+      &AsDmaDrv::ignore          /*   AS_DMA_STATE_TERMINATE */
     }
   }
 };
@@ -188,8 +202,7 @@ void AsDmaDrv::readyQuePush(const AudioDrvDmaRunParam &dmaParam)
 {
   if (!m_ready_que.push(dmaParam))
     {
-      ERROR_ATTENTION(AS_MODULE_ID_AUDIO_DRIVER,
-                      AS_ATTENTION_SUB_CODE_QUEUE_PUSH_ERROR);
+      DMAC_ERR(AS_ATTENTION_SUB_CODE_QUEUE_PUSH_ERROR);
     }
 }
 
@@ -198,8 +211,7 @@ void AsDmaDrv::readyQuePop()
 {
   if (!m_ready_que.pop())
     {
-      ERROR_ATTENTION(AS_MODULE_ID_AUDIO_DRIVER,
-                      AS_ATTENTION_SUB_CODE_QUEUE_POP_ERROR);
+      DMAC_ERR(AS_ATTENTION_SUB_CODE_QUEUE_POP_ERROR);
     }
 }
 
@@ -208,8 +220,7 @@ void AsDmaDrv::runningQuePush(const AudioDrvDmaRunParam &dmaParam)
 {
   if (!m_running_que.push(dmaParam))
     {
-      ERROR_ATTENTION(AS_MODULE_ID_AUDIO_DRIVER,
-                      AS_ATTENTION_SUB_CODE_QUEUE_PUSH_ERROR);
+      DMAC_ERR(AS_ATTENTION_SUB_CODE_QUEUE_PUSH_ERROR);
     }
 }
 
@@ -218,8 +229,7 @@ void AsDmaDrv::runningQuePop()
 {
   if (!m_running_que.pop())
     {
-      ERROR_ATTENTION(AS_MODULE_ID_AUDIO_DRIVER,
-                      AS_ATTENTION_SUB_CODE_QUEUE_POP_ERROR);
+      DMAC_ERR(AS_ATTENTION_SUB_CODE_QUEUE_POP_ERROR);
     }
 }
 
@@ -247,16 +257,21 @@ bool AsDmaDrv::parse(ExternalEvent event, void *p_param)
 {
   dmaDrvFuncTbl *p_tbl = searchFuncTbl(event);
 
-  return (this->*(p_tbl->p_func[m_state]))(p_param);
+  return (this->*(p_tbl->p_func[m_state.get()]))(p_param);
 }
 
 /*--------------------------------------------------------------------*/
 bool AsDmaDrv::illegal(void *p_param)
 {
   DMAC_ERR(AS_ATTENTION_SUB_CODE_ILLEGAL_REQUEST);
-  dmaErrCb(E_AS_BB_DMA_ILLEGAL);
 
   return false;
+}
+
+/*--------------------------------------------------------------------*/
+bool AsDmaDrv::ignore(void *p_param)
+{
+  return true;
 }
 
 /*--------------------------------------------------------------------*/
@@ -610,22 +625,6 @@ void AsDmaDrv::dmaCmplt(void)
                                 (void *)dmaParam.addr_dest);
     }
 
-  if ((cxd56_audio_get_dmafmt() == CXD56_AUDIO_DMA_FMT_RL)
-   && (m_dma_byte_len == AS_DMAC_BYTE_WT_16BIT) )
-    {
-      switch (m_dmac_id)
-        {
-          case CXD56_AUDIO_DMAC_I2S0_UP:
-          case CXD56_AUDIO_DMAC_I2S1_UP:
-              AS_AudioDrvDmaGetSwapData(dmaParam.split_addr,
-                                        dmaParam.split_size);
-              break;
-
-          default:
-              break;
-        }
-    }
-
   if (dmaParam.overlap_cnt == 0)
     {
       if (dmaParam.p_dmadone_func != NULL)
@@ -647,6 +646,11 @@ void AsDmaDrv::dmaCmplt(void)
                 {
                   resultParam.endflg  = true;
                 }
+            }
+
+          if (m_state == AS_DMA_STATE_ERROR)
+            {
+              resultParam.endflg  = true;
             }
 
           (*m_dmadone_func)(&resultParam);
@@ -707,13 +711,13 @@ bool AsDmaDrv::dmaCmpltOnRun(void *p_param)
     }
 #endif  /* CONFIG_AUDIOUTILS_RENDERER_UNDERFLOW */
 
-  if (m_running_que.size() == 0)
+  if (m_running_que.size() <= 1)
     {
       cxd56_audio_stop_dma(m_dmac_id);
 
       dmaErrCb(E_AS_BB_DMA_UNDERFLOW);
 
-      m_state = AS_DMA_STATE_PREPARE;
+      m_state = AS_DMA_STATE_ERROR;
 
       _info("PREPARE(%d)\n", m_dmac_id);
     }
@@ -744,6 +748,35 @@ bool AsDmaDrv::dmaCmpltOnFlush(void *p_param)
       m_state = AS_DMA_STATE_STOP;
       _info("STOP(%d)\n", m_dmac_id);
     }
+
+  return true;
+}
+
+/*--------------------------------------------------------------------*/
+bool AsDmaDrv::dmaCmpltOnError(void *p_param)
+{
+  dmaCmplt();
+
+  /* Current state is ERROR, it means this cmplt is last one
+   * Because DMA was already stopped when error has occured.
+   * Therefore, change state to STOP.
+   */
+
+  m_state = AS_DMA_STATE_TERMINATE;
+
+  return true;
+}
+
+/*--------------------------------------------------------------------*/
+bool AsDmaDrv::illegalDmaCmplt(void *p_param)
+{
+  DMAC_ERR(AS_ATTENTION_SUB_CODE_ILLEGAL_REQUEST);
+
+  /* Even if illegal completion, but need to reply to requester as usual.
+   * Because, DMA completion means that the transfer request have came.
+   */
+
+  dmaCmplt();
 
   return true;
 }
@@ -800,6 +833,8 @@ bool AsDmaDrv::stopOnRun(void *p_param)
 /*--------------------------------------------------------------------*/
 bool AsDmaDrv::dmaErrInt(void *p_param)
 {
+  cxd56_audio_stop_dma(m_dmac_id);
+
   dmaErrCb(E_AS_BB_DMA_ERR_INT);
 
   return true;
@@ -810,7 +845,7 @@ bool AsDmaDrv::dmaErrIntOnRun(void *p_param)
 {
   dmaErrInt(p_param);
 
-  m_state = AS_DMA_STATE_READY;
+  m_state = AS_DMA_STATE_TERMINATE;
 
   return true;
 }
@@ -828,7 +863,7 @@ void AsDmaDrv::dmaErrCb(E_AS_BB err_code)
 
       errorParam.dmac_id = m_dmac_id;
       errorParam.status  = err_code;
-      errorParam.state   = m_state;
+      errorParam.state   = m_state.get();
 #ifdef CONFIG_AUDIOUTILS_RENDERER_UNDERFLOW
     if (m_dmac_id != CXD56_AUDIO_DMAC_I2S0_DOWN &&
         m_dmac_id != CXD56_AUDIO_DMAC_I2S1_DOWN)
@@ -847,13 +882,11 @@ void AsDmaDrv::dmaErrCb(E_AS_BB err_code)
   switch (err_code)
     {
       case E_AS_BB_DMA_UNDERFLOW:
-          ERROR_ATTENTION(AS_MODULE_ID_AUDIO_DRIVER,
-                          AS_ATTENTION_SUB_CODE_DMA_UNDERFLOW);
+          DMAC_ERR(AS_ATTENTION_SUB_CODE_DMA_UNDERFLOW);
           break;
 
       case E_AS_BB_DMA_OVERFLOW:
-          ERROR_ATTENTION(AS_MODULE_ID_AUDIO_DRIVER,
-                          AS_ATTENTION_SUB_CODE_DMA_OVERFLOW);
+          DMAC_ERR(AS_ATTENTION_SUB_CODE_DMA_OVERFLOW);
           break;
 
       case E_AS_BB_DMA_ILLEGAL:
@@ -861,13 +894,11 @@ void AsDmaDrv::dmaErrCb(E_AS_BB err_code)
       case E_AS_BB_DMA_PARAM:
       case E_AS_BB_DMA_ERR_START:
       case E_AS_BB_DMA_ERR_REQUEST:
-          ERROR_ATTENTION(AS_MODULE_ID_AUDIO_DRIVER,
-                          AS_ATTENTION_SUB_CODE_DMA_ERROR);
+          DMAC_ERR(AS_ATTENTION_SUB_CODE_DMA_ERROR);
           break;
 
       case E_AS_BB_DMA_ERR_BUS:
-          FATAL_ATTENTION(AS_MODULE_ID_AUDIO_DRIVER,
-                          AS_ATTENTION_SUB_CODE_DMA_ERROR);
+          DMAC_FATAL(AS_ATTENTION_SUB_CODE_DMA_ERROR);
           break;
 
       default:
@@ -904,7 +935,7 @@ bool AsDmaDrv::getInfo(void *p_param)
   dmaInfo->running_empty = RUNNING_QUEUE_NUM - dmaInfo->running_wait;
   dmaInfo->ready_wait    = m_ready_que.size();
   dmaInfo->ready_empty   = READY_QUEUE_NUM - dmaInfo->ready_wait;
-  dmaInfo->state         = m_state;
+  dmaInfo->state         = m_state.get();
 
   return true;
 }

@@ -40,8 +40,6 @@
 #include "audio_bb_drv.h"
 #include "audio_dma_drv.h"
 
-#include <arch/chip/cxd56_audio.h>
-
 #include <debug.h>
 
 /****************************************************************************
@@ -86,7 +84,7 @@ E_AS dmaDrvDeactive(cxd56_audio_dma_t dmacId)
 
 static bool activateDmac[DMA_INST_NUM] =
 {
-  false, false, false, false, false
+  false, false, false
 };
 
 /*--------------------------------------------------------------------*/

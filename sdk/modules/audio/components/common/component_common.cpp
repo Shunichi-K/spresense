@@ -40,9 +40,9 @@
 __WIEN2_BEGIN_NAMESPACE
 
 /*--------------------------------------------------------------------*/
-bool ComponentCommon::dsp_boot_check(MsgQueId dsp_dtq,
-                                     uint32_t audioutil_dsp_version,
-                                     uint32_t *dsp_inf)
+template<typename T>
+bool ComponentCommon<T>::dsp_boot_check(MsgQueId dsp_dtq,
+                                        uint32_t *dsp_inf)
 {
   err_t        err_code;
   MsgQueBlock  *que;
@@ -59,17 +59,16 @@ bool ComponentCommon::dsp_boot_check(MsgQueId dsp_dtq,
   err_code = que->pop();
   F_ASSERT(err_code == ERR_OK);
 
-  if (dsp_version != audioutil_dsp_version)
-    {
-      *dsp_inf = dsp_version;
-      return false;
-    }
+  /* Reply DSP version */
+
+  *dsp_inf = dsp_version;
 
   return true;
 }
 
 /*--------------------------------------------------------------------*/
-uint32_t ComponentCommon::dsp_init_check(MsgQueId dsp_dtq, uint32_t *dsp_inf)
+template<typename T>
+uint32_t ComponentCommon<T>::dsp_init_check(MsgQueId dsp_dtq, T *internal)
 {
   err_t        err_code;
   MsgQueBlock  *que;
@@ -82,42 +81,38 @@ uint32_t ComponentCommon::dsp_init_check(MsgQueId dsp_dtq, uint32_t *dsp_inf)
   F_ASSERT(err_code == ERR_OK);
   F_ASSERT(msg->getType() == MSG_ISR_APU0);
 
-  DspResult rst = msg->moveParam<DspResult>();
+  DspResult<T> rst = msg->moveParam<DspResult<T> >();
   err_code = que->pop();
   F_ASSERT(err_code == ERR_OK);
 
-  if (rst.exec_result != Apu::ApuExecOK)
-    {
-      if (rst.internal_result.res_src == Apu::FromLib)
-        {
-          *dsp_inf = rst.internal_result.value;
-          return AS_ECODE_DECODER_LIB_INITIALIZE_ERROR;
-        }
-      else
-        {
-          return rst.internal_result.code;
-        }
-    }
+  *internal = rst.internal_result;
 
-  return AS_ECODE_OK;
+  return rst.exec_result;
 }
 
 /*--------------------------------------------------------------------*/
-void ComponentCommon::dsp_init_complete(MsgQueId dsp_dtq,
-                                        Apu::Wien2ApuCmd *packet)
+template<typename T>
+void ComponentCommon<T>::dsp_init_complete(MsgQueId dsp_dtq,
+                                           uint32_t result,
+                                           T *internal)
 {
-  DspResult dsp_result;
+  DspResult<T> dsp_result;
 
-  dsp_result.exec_result     = packet->result.exec_result;
-  dsp_result.internal_result = packet->result.internal_result[0];
+  dsp_result.exec_result     = result;
+  dsp_result.internal_result = *internal;
 
-  err_t er = MsgLib::send<DspResult>(dsp_dtq,
-                                     MsgPriNormal,
-                                     MSG_ISR_APU0,
-                                     0,
-                                     dsp_result);
+  err_t er = MsgLib::send<DspResult<T> >(dsp_dtq,
+                                         MsgPriNormal,
+                                         MSG_ISR_APU0,
+                                         0,
+                                         dsp_result);
   F_ASSERT(er == ERR_OK);
 }
+
+/* Explicit Instantiation */
+
+template class ComponentCommon<uint32_t>;
+template class ComponentCommon<Apu::InternalResult>;
 
 __WIEN2_END_NAMESPACE
 

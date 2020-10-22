@@ -140,7 +140,7 @@ fi
 
 # Check whether the environment is Cygwin and create the export directory
 
-if [ $(uname -o) = "Cygwin" ]; then
+if [ $(uname -o 2>/dev/null) = "Cygwin" ]; then
 	TMPDIR=`mktemp -d | cygpath -m -f -`
 else
 	TMPDIR=`mktemp -d`
@@ -323,6 +323,18 @@ for dir in ${OSDIRS}; do
 	cp -f "${TOPDIR}"/sched/${dir}/*.h "${EXPORTNXDIR}"/arch/os/${dir}/. 2>/dev/null
 done
 
+# Copy External CMSIS header files
+
+mkdir "${EXPORTNXDIR}/include/cmsis" || { echo "MK: 'mkdir ${EXPORTNXDIR}/include/cmsis' failed"; exit 1; }
+cp -rp "${SDKDIR}"/../externals/cmsis/CMSIS_5/CMSIS/NN/Include/* "${EXPORTNXDIR}/include/cmsis"
+cp -rp "${SDKDIR}"/../externals/cmsis/CMSIS_5/CMSIS/DSP/Include/* "${EXPORTNXDIR}/include/cmsis"
+cp -rp "${SDKDIR}"/../externals/cmsis/CMSIS_5/CMSIS/Core/Include/* "${EXPORTNXDIR}/include/cmsis"
+
+# Copy External mbedTLS header files
+
+mkdir "${EXPORTNXDIR}/include/mbedtls" || { echo "MK: 'mkdir ${EXPORTNXDIR}/include/mbedtls' failed"; exit 1; }
+cp -rp "${SDKDIR}"/../externals/alt_stubs/mbedtls/include/mbedtls/* "${EXPORTNXDIR}/include/mbedtls"
+
 # Add the board library to the list of libraries
 
 LIBLIST="${LIBLIST} bsp/board/libboard${LIBEXT}"
@@ -331,6 +343,7 @@ LIBLIST="${LIBLIST} bsp/board/libboard${LIBEXT}"
 
 ARTMPDIR=`mktemp -d`
 AR=${CROSSDEV}ar
+STRIP=${CROSSDEV}strip
 for lib in ${LIBLIST}; do
 	if [ ! -f "${SDKDIR}/${lib}" ]; then
 		echo "MK: Library ${SDKDIR}/${lib} does not exist"
@@ -367,6 +380,10 @@ for lib in ${LIBLIST}; do
 			${AR} rcs "${EXPORTSDKDIR}/libs/libsdk${LIBEXT}" "${shortname}-${file}"
 		done
 
+		# Remove debugging symbols
+
+		${STRIP} -g "${EXPORTSDKDIR}/libs/libsdk${LIBEXT}"
+
 		# Remove all of extracted object files
 
 		rm -f *.o
@@ -374,6 +391,9 @@ for lib in ${LIBLIST}; do
 		cd "${PREVDIR}"
 	fi
 done
+
+# Copy LICENSE file
+cp -f "${SDKDIR}"/../LICENSE "${EXPORTDIR}"/LICENSE
 
 # Now tar up the whole export directory
 

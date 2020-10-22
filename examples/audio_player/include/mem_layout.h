@@ -1,7 +1,8 @@
+/* This file is generated automatically. */
 /****************************************************************************
- * audio_player/include/mem_layout.h
+ * mem_layout.h
  *
- *   Copyright 2018 Sony Semiconductor Solutions Corporation
+ *   Copyright 2019 Sony Semiconductor Solutions Corporation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,22 +40,25 @@
 /*
  * Memory devices
  */
+
 /* AUD_SRAM: type=RAM, use=0x0003f300, remainder=0x00000d00 */
+
 #define AUD_SRAM_ADDR  0x000c0000
 #define AUD_SRAM_SIZE  0x00040000
 
 /*
  * Fixed areas
  */
+
 #define AUDIO_WORK_AREA_ALIGN   0x00000008
 #define AUDIO_WORK_AREA_ADDR    0x000c0000
 #define AUDIO_WORK_AREA_DRM     0x000c0000 /* _DRM is obsolete macro. to use _ADDR */
-#define AUDIO_WORK_AREA_SIZE    0x0003e000
+#define AUDIO_WORK_AREA_SIZE    0x0003d000
 
 #define MSG_QUE_AREA_ALIGN   0x00000008
-#define MSG_QUE_AREA_ADDR    0x000fe000
-#define MSG_QUE_AREA_DRM     0x000fe000 /* _DRM is obsolete macro. to use _ADDR */
-#define MSG_QUE_AREA_SIZE    0x00001000
+#define MSG_QUE_AREA_ADDR    0x000fd000
+#define MSG_QUE_AREA_DRM     0x000fd000 /* _DRM is obsolete macro. to use _ADDR */
+#define MSG_QUE_AREA_SIZE    0x00002000
 
 #define MEMMGR_WORK_AREA_ALIGN   0x00000008
 #define MEMMGR_WORK_AREA_ADDR    0x000ff000
@@ -69,87 +73,98 @@
 /*
  * Memory Manager max work area size
  */
-#define MEMMGR_MAX_WORK_SIZE  0x000000d0
+
+#define S0_MEMMGR_WORK_AREA_ADDR  MEMMGR_WORK_AREA_ADDR
+#define S0_MEMMGR_WORK_AREA_SIZE  0x000000a4
+
+/*
+ * Section IDs
+ */
+
+#define SECTION_NO0       0
+
+/*
+ * Number of sections
+ */
+
+#define NUM_MEM_SECTIONS  1
 
 /*
  * Pool IDs
  */
-#define NULL_POOL  0
-#define DEC_ES_MAIN_BUF_POOL  1
-#define REND_PCM_BUF_POOL  2
-#define DEC_APU_CMD_POOL  3
-#define PF0_PCM_BUF_POOL  4
-#define PF1_PCM_BUF_POOL  5
-#define PF0_APU_CMD_POOL  6
-#define PF1_APU_CMD_POOL  7
 
-#define NUM_MEM_LAYOUTS  1
-#define NUM_MEM_POOLS  8
+const MemMgrLite::PoolId S0_NULL_POOL                = { 0, SECTION_NO0};  /*  0 */
+const MemMgrLite::PoolId S0_DEC_ES_MAIN_BUF_POOL     = { 1, SECTION_NO0};  /*  1 */
+const MemMgrLite::PoolId S0_REND_PCM_BUF_POOL        = { 2, SECTION_NO0};  /*  2 */
+const MemMgrLite::PoolId S0_DEC_APU_CMD_POOL         = { 3, SECTION_NO0};  /*  3 */
+const MemMgrLite::PoolId S0_SRC_WORK_BUF_POOL        = { 4, SECTION_NO0};  /*  4 */
+const MemMgrLite::PoolId S0_PF0_PCM_BUF_POOL         = { 5, SECTION_NO0};  /*  5 */
+const MemMgrLite::PoolId S0_PF0_APU_CMD_POOL         = { 6, SECTION_NO0};  /*  6 */
 
+#define NUM_MEM_S0_LAYOUTS   1
+#define NUM_MEM_S0_POOLS     7
+
+#define NUM_MEM_LAYOUTS      1
+#define NUM_MEM_POOLS        7
 
 /*
  * Pool areas
  */
-/* Layout0: */
-#define MEMMGR_L0_WORK_SIZE   0x000000d0
+
+/* Section0 Layout0: */
+
+#define MEMMGR_S0_L0_WORK_SIZE   0x000000a4
 
 /* Skip 0x0004 bytes for alignment. */
-#define L0_DEC_ES_MAIN_BUF_POOL_ALIGN    0x00000008
-#define L0_DEC_ES_MAIN_BUF_POOL_L_FENCE  0x000c0004
-#define L0_DEC_ES_MAIN_BUF_POOL_ADDR     0x000c0008
-#define L0_DEC_ES_MAIN_BUF_POOL_SIZE     0x00006000
-#define L0_DEC_ES_MAIN_BUF_POOL_U_FENCE  0x000c6008
-#define L0_DEC_ES_MAIN_BUF_POOL_NUM_SEG  0x00000004
-#define L0_DEC_ES_MAIN_BUF_POOL_SEG_SIZE 0x00001800
 
-#define L0_REND_PCM_BUF_POOL_ALIGN    0x00000008
-#define L0_REND_PCM_BUF_POOL_L_FENCE  0x000c600c
-#define L0_REND_PCM_BUF_POOL_ADDR     0x000c6010
-#define L0_REND_PCM_BUF_POOL_SIZE     0x00012048
-#define L0_REND_PCM_BUF_POOL_U_FENCE  0x000d8058
-#define L0_REND_PCM_BUF_POOL_NUM_SEG  0x00000009
-#define L0_REND_PCM_BUF_POOL_SEG_SIZE 0x00002008
+#define S0_L0_DEC_ES_MAIN_BUF_POOL_ALIGN    0x00000008
+#define S0_L0_DEC_ES_MAIN_BUF_POOL_L_FENCE  0x000c0004
+#define S0_L0_DEC_ES_MAIN_BUF_POOL_ADDR     0x000c0008
+#define S0_L0_DEC_ES_MAIN_BUF_POOL_SIZE     0x00006000
+#define S0_L0_DEC_ES_MAIN_BUF_POOL_U_FENCE  0x000c6008
+#define S0_L0_DEC_ES_MAIN_BUF_POOL_NUM_SEG  0x00000004
+#define S0_L0_DEC_ES_MAIN_BUF_POOL_SEG_SIZE 0x00001800
 
-#define L0_DEC_APU_CMD_POOL_ALIGN    0x00000008
-#define L0_DEC_APU_CMD_POOL_L_FENCE  0x000d805c
-#define L0_DEC_APU_CMD_POOL_ADDR     0x000d8060
-#define L0_DEC_APU_CMD_POOL_SIZE     0x00000398
-#define L0_DEC_APU_CMD_POOL_U_FENCE  0x000d83f8
-#define L0_DEC_APU_CMD_POOL_NUM_SEG  0x0000000a
-#define L0_DEC_APU_CMD_POOL_SEG_SIZE 0x0000005c
+#define S0_L0_REND_PCM_BUF_POOL_ALIGN    0x00000008
+#define S0_L0_REND_PCM_BUF_POOL_L_FENCE  0x000c600c
+#define S0_L0_REND_PCM_BUF_POOL_ADDR     0x000c6010
+#define S0_L0_REND_PCM_BUF_POOL_SIZE     0x00015f90
+#define S0_L0_REND_PCM_BUF_POOL_U_FENCE  0x000dbfa0
+#define S0_L0_REND_PCM_BUF_POOL_NUM_SEG  0x00000005
+#define S0_L0_REND_PCM_BUF_POOL_SEG_SIZE 0x00004650
 
-#define L0_PF0_PCM_BUF_POOL_ALIGN    0x00000008
-#define L0_PF0_PCM_BUF_POOL_L_FENCE  0x000d83fc
-#define L0_PF0_PCM_BUF_POOL_ADDR     0x000d8400
-#define L0_PF0_PCM_BUF_POOL_SIZE     0x00002008
-#define L0_PF0_PCM_BUF_POOL_U_FENCE  0x000da408
-#define L0_PF0_PCM_BUF_POOL_NUM_SEG  0x00000001
-#define L0_PF0_PCM_BUF_POOL_SEG_SIZE 0x00002008
+#define S0_L0_DEC_APU_CMD_POOL_ALIGN    0x00000008
+#define S0_L0_DEC_APU_CMD_POOL_L_FENCE  0x000dbfa4
+#define S0_L0_DEC_APU_CMD_POOL_ADDR     0x000dbfa8
+#define S0_L0_DEC_APU_CMD_POOL_SIZE     0x00000398
+#define S0_L0_DEC_APU_CMD_POOL_U_FENCE  0x000dc340
+#define S0_L0_DEC_APU_CMD_POOL_NUM_SEG  0x0000000a
+#define S0_L0_DEC_APU_CMD_POOL_SEG_SIZE 0x0000005c
 
-#define L0_PF1_PCM_BUF_POOL_ALIGN    0x00000008
-#define L0_PF1_PCM_BUF_POOL_L_FENCE  0x000da40c
-#define L0_PF1_PCM_BUF_POOL_ADDR     0x000da410
-#define L0_PF1_PCM_BUF_POOL_SIZE     0x00002008
-#define L0_PF1_PCM_BUF_POOL_U_FENCE  0x000dc418
-#define L0_PF1_PCM_BUF_POOL_NUM_SEG  0x00000001
-#define L0_PF1_PCM_BUF_POOL_SEG_SIZE 0x00002008
+#define S0_L0_SRC_WORK_BUF_POOL_ALIGN    0x00000008
+#define S0_L0_SRC_WORK_BUF_POOL_L_FENCE  0x000dc344
+#define S0_L0_SRC_WORK_BUF_POOL_ADDR     0x000dc348
+#define S0_L0_SRC_WORK_BUF_POOL_SIZE     0x00002000
+#define S0_L0_SRC_WORK_BUF_POOL_U_FENCE  0x000de348
+#define S0_L0_SRC_WORK_BUF_POOL_NUM_SEG  0x00000001
+#define S0_L0_SRC_WORK_BUF_POOL_SEG_SIZE 0x00002000
 
-#define L0_PF0_APU_CMD_POOL_ALIGN    0x00000008
-#define L0_PF0_APU_CMD_POOL_L_FENCE  0x000dc41c
-#define L0_PF0_APU_CMD_POOL_ADDR     0x000dc420
-#define L0_PF0_APU_CMD_POOL_SIZE     0x00000398
-#define L0_PF0_APU_CMD_POOL_U_FENCE  0x000dc7b8
-#define L0_PF0_APU_CMD_POOL_NUM_SEG  0x0000000a
-#define L0_PF0_APU_CMD_POOL_SEG_SIZE 0x0000005c
+#define S0_L0_PF0_PCM_BUF_POOL_ALIGN    0x00000008
+#define S0_L0_PF0_PCM_BUF_POOL_L_FENCE  0x000de34c
+#define S0_L0_PF0_PCM_BUF_POOL_ADDR     0x000de350
+#define S0_L0_PF0_PCM_BUF_POOL_SIZE     0x00004650
+#define S0_L0_PF0_PCM_BUF_POOL_U_FENCE  0x000e29a0
+#define S0_L0_PF0_PCM_BUF_POOL_NUM_SEG  0x00000001
+#define S0_L0_PF0_PCM_BUF_POOL_SEG_SIZE 0x00004650
 
-#define L0_PF1_APU_CMD_POOL_ALIGN    0x00000008
-#define L0_PF1_APU_CMD_POOL_L_FENCE  0x000dc7bc
-#define L0_PF1_APU_CMD_POOL_ADDR     0x000dc7c0
-#define L0_PF1_APU_CMD_POOL_SIZE     0x00000398
-#define L0_PF1_APU_CMD_POOL_U_FENCE  0x000dcb58
-#define L0_PF1_APU_CMD_POOL_NUM_SEG  0x0000000a
-#define L0_PF1_APU_CMD_POOL_SEG_SIZE 0x0000005c
+#define S0_L0_PF0_APU_CMD_POOL_ALIGN    0x00000008
+#define S0_L0_PF0_APU_CMD_POOL_L_FENCE  0x000e29a4
+#define S0_L0_PF0_APU_CMD_POOL_ADDR     0x000e29a8
+#define S0_L0_PF0_APU_CMD_POOL_SIZE     0x00000398
+#define S0_L0_PF0_APU_CMD_POOL_U_FENCE  0x000e2d40
+#define S0_L0_PF0_APU_CMD_POOL_NUM_SEG  0x0000000a
+#define S0_L0_PF0_APU_CMD_POOL_SEG_SIZE 0x0000005c
 
-/* Remainder AUDIO_WORK_AREA=0x000214a4 */
+/* Remainder AUDIO_WORK_AREA=0x0001a2bc */
 
 #endif /* MEM_LAYOUT_H_INCLUDED */

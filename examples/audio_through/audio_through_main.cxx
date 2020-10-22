@@ -37,14 +37,14 @@
  * Included Files
  ****************************************************************************/
 
-#include <sdk/config.h>
+#include <nuttx/config.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <errno.h>
-
+#include <arch/board/board.h>
 #include <asmp/mpshm.h>
 #include <arch/chip/pm.h>
 #include <sys/stat.h>
@@ -79,7 +79,6 @@ enum audio_through_test_path_e
 {
   TEST_PATH_IN_MIC_OUT_SP = 0,
   TEST_PATH_IN_MIC_OUT_I2S,
-  TEST_PATH_IN_I2S_OUT_I2S,
   TEST_PATH_IN_I2S_OUT_SP,
   TEST_PATH_IN_MIC_I2S_OUT_I2S_SP,
   TEST_PATH_NUM
@@ -101,7 +100,6 @@ char s_path_name[TEST_PATH_NUM][64] =
 {
   "mic in -> sp out",
   "mic in -> i2s out",
-  "i2s in -> i2s out",
   "i2s in -> sp out",
   "mic in -> i2s out, and i2s in -> sp outt"
 };
@@ -133,13 +131,13 @@ static bool printAudCmdResult(uint8_t command_code, AudioResult& result)
   return true;
 }
 
-static void app_attention_callback(uint8_t module_id,
-                                   uint8_t error_code,
-                                   uint8_t sub_code,
-                                   const char* file_name,
-                                   uint32_t line)
+static void app_attention_callback(const ErrorAttentionParam *attparam)
 {
-  printf("Attention!! %s L%d ecode %d subcode %d\n", file_name, line, error_code, sub_code);
+  printf("Attention!! %s L%d ecode %d subcode %d\n",
+          attparam->error_filename,
+          attparam->line_number,
+          attparam->error_code,
+          attparam->error_att_sub_code);
 }
 
 static bool app_create_audio_sub_system(void)
@@ -277,15 +275,6 @@ static bool app_set_through_path(audio_through_test_path_e path_type)
         command.set_through_path.path2.en  = false;
         break;
 
-      case TEST_PATH_IN_I2S_OUT_I2S: /* i2s in -> i2s out */
-        command.set_through_path.path1.en  = true;
-        command.set_through_path.path1.in  = AS_THROUGH_PATH_IN_I2S1;
-        command.set_through_path.path1.out = AS_THROUGH_PATH_OUT_MIXER1;
-        command.set_through_path.path2.en  = true;
-        command.set_through_path.path2.in  = AS_THROUGH_PATH_IN_MIXER;
-        command.set_through_path.path2.out = AS_THROUGH_PATH_OUT_I2S1;
-        break;
-
       case TEST_PATH_IN_I2S_OUT_SP: /* i2s in -> sp out */
         command.set_through_path.path1.en  = true;
         command.set_through_path.path1.in  = AS_THROUGH_PATH_IN_I2S1;
@@ -313,20 +302,6 @@ static bool app_set_through_path(audio_through_test_path_e path_type)
   return printAudCmdResult(command.header.command_code, result);
 }
 
-static bool app_init_output_select(void)
-{
-  AudioCommand command;
-  command.header.packet_length = LENGTH_INITOUTPUTSELECT;
-  command.header.command_code  = AUDCMD_INITOUTPUTSELECT;
-  command.header.sub_code      = 0;
-  command.init_output_select_param.output_device_sel = AS_OUT_SP;
-  AS_SendAudioCommand(&command);
-
-  AudioResult result;
-  AS_ReceiveAudioResult(&result);
-  return printAudCmdResult(command.header.command_code, result);
-}
-
 static bool app_init_mic_gain(void)
 {
   AudioCommand command;
@@ -341,22 +316,6 @@ static bool app_init_mic_gain(void)
   command.init_mic_gain_param.mic_gain[5] = AS_MICGAIN_HOLD;
   command.init_mic_gain_param.mic_gain[6] = AS_MICGAIN_HOLD;
   command.init_mic_gain_param.mic_gain[7] = AS_MICGAIN_HOLD;
-  AS_SendAudioCommand(&command);
-
-  AudioResult result;
-  AS_ReceiveAudioResult(&result);
-  return printAudCmdResult(command.header.command_code, result);
-}
-
-static bool app_init_i2s_param(void)
-{
-  AudioCommand command;
-  command.header.packet_length  = LENGTH_INITI2SPARAM;
-  command.header.command_code   = AUDCMD_INITI2SPARAM;
-  command.header.sub_code       = 0;
-  command.init_i2s_param.i2s_id = AS_I2S1;
-  command.init_i2s_param.rate   = 48000;
-  command.init_i2s_param.bypass_mode_en = AS_I2S_BYPASS_MODE_DISABLE;
   AS_SendAudioCommand(&command);
 
   AudioResult result;
@@ -434,11 +393,7 @@ static bool app_finalize_libraries(void)
  * Public Functions
  ****************************************************************************/
 
-#ifdef CONFIG_BUILD_KERNEL
 extern "C" int main(int argc, FAR char *argv[])
-#else
-extern "C" int audio_through_main(int argc, char *argv[])
-#endif
 {
   printf("Start AudioThrough example\n");
 
@@ -470,27 +425,11 @@ extern "C" int audio_through_main(int argc, char *argv[])
       return 1;
     }
 
-  /* Initialize Speaker Out */
-
-    if (!app_init_output_select())
-    {
-      printf("Error: app_init_output_select() failure.\n");
-      return 1;
-    }
-
   /* Set through operation mode. */
 
   if (!app_set_through_status())
     {
       printf("Error: app_set_through_status() failure.\n");
-      return 1;
-    }
-
-  /* Initialize I2S parameter */
-
-  if (!app_init_i2s_param())
-    {
-      printf("Error: app_init_mic_gain() failure.\n");
       return 1;
     }
 
@@ -506,6 +445,14 @@ extern "C" int audio_through_main(int argc, char *argv[])
 
   for (int type = 0; type < TEST_PATH_NUM; type++)
     {
+       /* Set output mute. */
+
+       if (board_external_amp_mute_control(true) != OK)
+         {
+           printf("Error: board_external_amp_mute_control(true) failuer.\n");
+           return 1;
+         }
+
       if (!app_set_through_path((audio_through_test_path_e)type))
         {
           printf("Error: app_set_through_path() failure.\n");
@@ -514,14 +461,19 @@ extern "C" int audio_through_main(int argc, char *argv[])
 
       /* If output speaker, cancel mute. */
 
-      if (!(type == TEST_PATH_IN_MIC_OUT_I2S ||
-            type == TEST_PATH_IN_I2S_OUT_I2S))
+      if (!(type == TEST_PATH_IN_MIC_OUT_I2S))
         {
           /* Cancel mute. */
 
           if (!app_set_volume(DEF_VOLUME))
             {
               printf("Error: app_set_volume() failure.\n");
+              return 1;
+            }
+
+          if (board_external_amp_mute_control(false) != OK)
+            {
+              printf("Error: board_external_amp_mute_control(false) failuer.\n");
               return 1;
             }
         }
@@ -538,6 +490,14 @@ extern "C" int audio_through_main(int argc, char *argv[])
 
       app_set_mute();
     } 
+
+  /* Set output mute. */
+
+  if (board_external_amp_mute_control(true) != OK)
+    {
+      printf("Error: board_external_amp_mute_control(true) failuer.\n");
+      return 1;
+    }
 
   /* Return the state of AudioSubSystem before voice_call operation. */
 

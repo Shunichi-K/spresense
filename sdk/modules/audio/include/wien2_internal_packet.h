@@ -50,6 +50,13 @@ __WIEN2_BEGIN_NAMESPACE
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+enum ComponentEventType
+{
+  ComponentInit = 0,
+  ComponentExec,
+  ComponentFlush,
+  ComponentSet,
+};
 
 /****************************************************************************
  * Public Types
@@ -60,7 +67,7 @@ struct AudioMngCmdCmpltResult
   uint8_t    command_code;  /**< command code of high level API */
   uint8_t    sub_code;      /**< sub code of high level API */
   uint8_t    module_id;     /**< module id of high level API */
-  uint8_t    reserved;
+  uint8_t    sub_module_id; /**< sub module id */
   uint32_t   result;        /**< result code of high level API */
   uint32_t   sub_result;
 
@@ -76,47 +83,81 @@ struct AudioMngCmdCmpltResult
                          uint8_t arg_sub_code,
                          uint32_t arg_result,
                          uint8_t arg_module_id,
-                         uint32_t arg_sub_result = 0):
+                         uint32_t arg_sub_result = 0,
+                         uint8_t arg_sub_module_id = 0):
     command_code(arg_command_code),
     sub_code(arg_sub_code),
     module_id(arg_module_id),
+    sub_module_id(arg_sub_module_id),
     result(arg_result),
     sub_result(arg_sub_result)
   {}
 };
 
-/*--------------------------------------------------------------------*/
-/* Internal parameters between output-mix object and its user.        */
-/*--------------------------------------------------------------------*/
 
-struct OutputMixObjPostfilterDoneCmd
+
+struct ComponentCbParam
 {
-  Apu::ApuEventType event_type;
+  ComponentEventType event_type;
+  bool               result;
 };
 
-/**< Parameters for render done notify to output-mix object. */
-struct OutputMixObjRenderDoneCmd
+typedef bool (*ComponentCallback)(ComponentCbParam*, void*);
+
+struct FixedInitParam
 {
-  bool end_flag;
-  bool error_flag;
+  uint32_t samples;
+  uint32_t in_fs;
+  uint32_t out_fs;
+  uint16_t in_bitlength;
+  uint16_t out_bitlength;
+  uint8_t  ch_num;
 };
 
-struct OutputMixObjParam
+struct CustomProcPacket
 {
-  int handle;
+  uint8_t  *addr;
+  uint32_t size;
+};
+
+struct InitComponentParam
+{
+  uint8_t          cmd_type;
+  bool             is_userdraw;
 
   union
   {
-    OutputMixObjPostfilterDoneCmd postfilterdone_param;
-    OutputMixObjRenderDoneCmd     renderdone_param;
+    FixedInitParam   fixparam;
+    CustomProcPacket packet;
   };
 };
+typedef InitComponentParam SetComponentParam;
 
-struct DspResult
+struct ExecComponentParam
 {
-  Apu::ExecResult  exec_result;
-  Apu::InternalResult  internal_result;
+  AsPcmDataParam        input;
+  MemMgrLite::MemHandle output_mh;
 };
+
+struct FlushComponentParam
+{
+  CustomProcPacket      packet;
+  MemMgrLite::MemHandle output_mh;
+};
+
+struct ComponentCmpltParam
+{
+  bool                 result;
+  AsPcmDataParam       output;
+};
+
+struct ComponentInformParam
+{
+  bool              result;
+  uint32_t          inform_req;
+  AsRecognitionInfo inform_data;
+};
+
 
 /****************************************************************************
  * Public Data

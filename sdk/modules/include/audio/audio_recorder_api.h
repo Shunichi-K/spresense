@@ -33,8 +33,8 @@
  *
  ****************************************************************************/
 
-#ifndef __SONY_APPS_INCLUDE_AUDIOUTIL_AUDIO_RECORDER_API_H
-#define __SONY_APPS_INCLUDE_AUDIOUTIL_AUDIO_RECORDER_API_H
+#ifndef __MODULES_INCLUDE_AUDIO_AUDIO_RECORDER_API_H
+#define __MODULES_INCLUDE_AUDIO_AUDIO_RECORDER_API_H
 
 /**
  * @defgroup audioutils Audio Utility
@@ -56,6 +56,9 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+
+#include "audio/audio_common_defs.h"
+#include "audio/audio_object_common_api.h"
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -92,6 +95,10 @@ typedef enum
 
   AsRecorderEventAct = 0,
 
+  /*! \brief Deactivate */
+
+  AsRecorderEventDeact,
+
   /*! \brief Init */
 
   AsRecorderEventInit,
@@ -100,13 +107,13 @@ typedef enum
 
   AsRecorderEventStart,
 
+  /*! \brief Req Encode */
+
+  AsRecorderEventReqEncode,
+
   /*! \brief Stop */
 
-  AsRecorderEventStop,
-
-  /*! \brief Deactivate */
-
-  AsRecorderEventDeact,
+  AsRecorderEventStop
 
 } AsRecorderEvent;
 
@@ -116,17 +123,17 @@ typedef enum
 
 typedef enum
 {
-  /*! \brief CXD5247 AMIC */
+  /*! \brief CXD5247 MIC */
 
-  AS_SETRECDR_STS_INPUTDEVICE_MIC_A = 0,
+  AS_SETRECDR_STS_INPUTDEVICE_MIC = 0,
 
-  /*! \brief CXD5247 DMIC */
+  /* Note:
+   * Delete this definition with Ver 1.1.0
+   */
 
-  AS_SETRECDR_STS_INPUTDEVICE_MIC_D,
+  AS_SETRECDR_STS_INPUTDEVICE_MIC_A = AS_SETRECDR_STS_INPUTDEVICE_MIC,
+  AS_SETRECDR_STS_INPUTDEVICE_MIC_D = AS_SETRECDR_STS_INPUTDEVICE_MIC,
 
-  /*! \brief I2S Input */
-
-  AS_SETRECDR_STS_INPUTDEVICE_I2S_IN,
   AS_SETRECDR_STS_INPUTDEVICE_NUM
 } AsSetRecorderStsInputDevice;
 
@@ -134,7 +141,9 @@ typedef enum
 
 typedef enum
 {
-  /*! \brief eMMC FileSystem (__not supported__) */
+  /*! \brief eMMC FileSystem
+   *  \deprecated It will be removed in the future
+   */
 
   AS_SETRECDR_STS_OUTPUTDEVICE_EMMC = 0,
 
@@ -365,6 +374,22 @@ typedef struct
 {
   /*! \brief [in] Memory pool id of input data */
 
+  MemMgrLite::PoolId input;
+
+  /*! \brief [in] Memory pool id of output data */
+
+  MemMgrLite::PoolId output;
+
+  /*! \brief [in] Memory pool id of dsp command data */
+
+  MemMgrLite::PoolId dsp;
+
+} AsRecorderPoolId_t;
+
+typedef struct
+{
+  /*! \brief [in] Memory pool id of input data */
+
   uint8_t input;
 
   /*! \brief [in] Memory pool id of output data */
@@ -374,9 +399,22 @@ typedef struct
   /*! \brief [in] Memory pool id of dsp command data */
 
   uint8_t dsp;
-} AsRecorderPoolId_t;
+
+} AsRecorderPoolId_old_t;
 
 /** Activate function parameter */
+
+typedef struct
+{
+  /*! \brief [in] ID for sending messages to each function */
+
+  AsRecorderMsgQueId_t    msgq_id;
+
+  /*! \brief [in] ID of memory pool for processing data */
+
+  AsRecorderPoolId_old_t  pool_id;
+
+} AsCreateRecorderParam_t;
 
 typedef struct
 {
@@ -387,7 +425,8 @@ typedef struct
   /*! \brief [in] ID of memory pool for processing data */
 
   AsRecorderPoolId_t   pool_id;
-} AsCreateRecorderParam_t;
+
+} AsCreateRecorderParams_t;
 
 /****************************************************************************
  * Public Data
@@ -401,25 +440,35 @@ typedef struct
  * Public Function Prototypes
  ****************************************************************************/
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 /**
  * @brief Create audio recorder
  *
  * @param[in] param: Parameters of resources used by audio recorder
+ * @param[in] attcb: Attention callback of Recorder. NULL means no callback.
  *
  * @retval     true  : success
  * @retval     false : failure
  */
 
+bool AS_CreateMediaRecorder(FAR AsCreateRecorderParam_t *param,
+                            AudioAttentionCb attcb);
+
+bool AS_CreateMediaRecorder(FAR AsCreateRecorderParams_t *param,
+                            AudioAttentionCb attcb);
+
+__attribute__((deprecated(
+                 "\n \
+                  \n Deprecated create API is used. \
+                  \n Use \"AS_CreateMediaRecorder(AsCreateRecorderParam_t, \
+                  \n                             AudioAttentionCb)\". \
+                  \n \
+                  \n")))
 bool AS_CreateMediaRecorder(FAR AsCreateRecorderParam_t *param);
 
 /**
  * @brief Activate audio recorder
  *
- * @param[in] param: Activation parameters
+ * @param[in] actparam: Activation parameters
  *
  * @retval     true  : success
  * @retval     false : failure
@@ -430,13 +479,24 @@ bool AS_ActivateMediaRecorder(FAR AsActivateRecorder *actparam);
 /**
  * @brief Init audio recorder
  *
- * @param[in] param: Initialization parameters
+ * @param[in] initparam: Initialization parameters
  *
  * @retval     true  : success
  * @retval     false : failure
  */
 
 bool AS_InitMediaRecorder(FAR AsInitRecorderParam *initparam);
+
+/**
+ * @brief Request encode to audio recorder
+ *
+ * @param[in] pcmparam: Information of target PCM data
+ *
+ * @retval     true  : success
+ * @retval     false : failure
+ */
+
+bool AS_ReqEncodeMediaRecorder(AsPcmDataParam *pcmparam);
 
 /**
  * @brief Start audio recorder
@@ -474,11 +534,16 @@ bool AS_DeactivateMediaRecorder(void);
 
 bool AS_DeleteMediaRecorder(void);
 
-#ifdef __cplusplus
-}
-#endif
+/**
+ * @brief Check availability of MediaRecorder 
+ *
+ * @retval     true  : avaliable 
+ * @retval     false : Not available 
+ */
 
-#endif  /* __SONY_APPS_INCLUDE_AUDIOUTIL_AUDIO_RECORDER_API_H */
+bool AS_checkAvailabilityMediaRecorder(void);
+
+#endif  /* __MODULES_INCLUDE_AUDIO_AUDIO_RECORDER_API_H */
 /**
  * @}
  */

@@ -38,6 +38,7 @@
 import os
 import sys
 import re
+import shutil
 
 TOOL_DESCRIPTION = '''
 Create a new application
@@ -50,8 +51,8 @@ of sdk and examples.
 
 KCONFIG_TMPL = '''
 config {configname}
-	bool "{menudesc}"
-	default n
+	tristate "{menudesc}"
+	default y
 	---help---
 		Enable the {appname} app
 
@@ -60,7 +61,6 @@ if {configname}
 config {configname}_PROGNAME
 	string "Program name"
 	default "{appname}"
-	depends on BUILD_KERNEL
 	---help---
 		This is the name of the program that will be use when the NSH ELF
 		program is installed.
@@ -80,19 +80,14 @@ MAKEFILE_TMPL = '''
 -include $(TOPDIR)/Make.defs
 -include $(SDKDIR)/Make.defs
 
-CONFIG_{configname}_PRIORITY ?= SCHED_PRIORITY_DEFAULT
-CONFIG_{configname}_STACKSIZE ?= 2048
-
-APPNAME = {appname}
+PROGNAME = $(CONFIG_{configname}_PROGNAME)
 PRIORITY = $(CONFIG_{configname}_PRIORITY)
 STACKSIZE = $(CONFIG_{configname}_STACKSIZE)
+MODULE = $(CONFIG_{configname})
 
 ASRCS =
 CSRCS =
 MAINSRC = {appname}_main.c
-
-CONFIG_{configname}_PROGNAME ?= {appname}$(EXEEXT)
-PROGNAME = $(CONFIG_{configname}_PROGNAME)
 
 include $(APPDIR)/Application.mk
 '''
@@ -104,14 +99,10 @@ endif
 '''
 
 MAINCSRC_TMPL = '''
-#include <sdk/config.h>
+#include <nuttx/config.h>
 #include <stdio.h>
 
-#ifdef CONFIG_BUILD_KERNEL
 int main(int argc, FAR char *argv[])
-#else
-int {appname}_main(int argc, char *argv[])
-#endif
 {{
   return 0;
 }}
@@ -152,10 +143,20 @@ if __name__ == '__main__':
     verbose = opts.verbose
 
     appname = opts.appname
-    optprefix = opts.basedir.upper()
+    optprefix = os.path.basename(os.path.normpath(opts.basedir)).upper()
     configname = optprefix + '_' + appname.upper()
     maincsrcfile = appname + '_main.c'
-    basedir = os.path.join('..', opts.basedir)
+    sdkdir = os.path.abspath(os.path.join(sys.argv[0], '..', '..'))
+
+    #
+    # The base directory strategy is:
+    # 1. absolute path or relative path => use them
+    # 2. just a name => sibling of sdk directory
+    #
+    if opts.basedir.startswith('/') or opts.basedir.startswith('.'):
+        basedir = opts.basedir
+    else:
+        basedir = os.path.join('..', opts.basedir)
     targetdir = appname
     if opts.desc:
         menudesc = opts.desc
@@ -170,9 +171,8 @@ if __name__ == '__main__':
         print('Any white spaces not allowed in <appname>', file=sys.stderr)
         sys.exit(1)
 
-    if not os.path.exists('Application.mk'):
-        print("This tool must run on the directory where 'Application.mk' file exists",
-              file=sys.stderr)
+    if not os.path.exists('.sdksubdir'):
+        print("This tool must run for the application root directory", file=sys.stderr)
         sys.exit(2)
 
     try:
@@ -193,4 +193,15 @@ if __name__ == '__main__':
     with open('.gitignore', "w") as f:
         f.write(GITIGNORE)
 
-    print("New '%s' app successfully created. Please 'make clean' from sdk first." % appname)
+    defconfigdir = os.path.join('configs', 'default')
+    os.makedirs(defconfigdir, exist_ok=True)
+    src = os.path.join(sdkdir, 'configs', 'default', 'defconfig')
+    dst = os.path.join(defconfigdir, 'defconfig')
+    shutil.copyfile(src, dst)
+    with open(dst, "a") as f:
+        f.write("CONFIG_%s" % configname)
+
+    print("New '%s' app successfully created at '%s'." % (appname, os.path.join(basedir, appname)))
+
+    if os.path.isfile(os.path.join('..', 'Kconfig')):
+        print("Please 'make clean' from sdk first.")

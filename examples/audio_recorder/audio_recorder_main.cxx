@@ -37,7 +37,7 @@
  * Included Files
  ****************************************************************************/
 
-#include <sdk/config.h>
+#include <nuttx/config.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -53,15 +53,21 @@
 #include "memutils/memory_manager/MemHandle.h"
 #include "memutils/message/Message.h"
 #include "audio/audio_high_level_api.h"
+#include <audio/utilities/wav_containerformat.h>
+#include <audio/utilities/frame_samples.h>
 #include "include/msgq_id.h"
 #include "include/mem_layout.h"
 #include "include/memory_layout.h"
 #include "include/msgq_pool.h"
 #include "include/pool_layout.h"
 #include "include/fixed_fence.h"
-#include "container_format_lib/wav_containerformat.h"
+#ifdef CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC
+#include "userproc_command.h"
+#endif /* CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC */
 
-#include <arch/chip/cxd56_audio.h>
+/* Section number of memory layout to use */
+
+#define AUDIO_SECTION   SECTION_NO0
 
 using namespace MemMgrLite;
 
@@ -71,12 +77,6 @@ using namespace MemMgrLite;
 
 #define RECFILE_ROOTPATH "/mnt/sd0/REC"
 #define DSPBIN_PATH "/mnt/sd0/BIN"
-
-/* Use microphone type.
- *   Set MICROPHONE_ANALOG or MICROPHONE_DIGITAL as type
- */
-
-#define USE_MICROPHONE  MICROPHONE_ANALOG
 
 /* Use microphone channel number.
  *   [Analog microphone]
@@ -91,8 +91,8 @@ using namespace MemMgrLite;
 
 /* For FIFO. */
 
-#define READ_SIMPLE_FIFO_SIZE (1536 * USE_MIC_CHANNEL_NUM)
-#define SIMPLE_FIFO_FRAME_NUM 10
+#define READ_SIMPLE_FIFO_SIZE (3072 * USE_MIC_CHANNEL_NUM)
+#define SIMPLE_FIFO_FRAME_NUM 60
 #define SIMPLE_FIFO_BUF_SIZE  (READ_SIMPLE_FIFO_SIZE * SIMPLE_FIFO_FRAME_NUM)
 
 /* For line buffer mode. */
@@ -129,6 +129,7 @@ struct recorder_file_info_s
 {
   uint32_t  sampling_rate;
   uint8_t   channel_number;
+  uint8_t   bitwidth;
   uint8_t   codec_type;
   uint16_t  format_type;
   uint32_t  size;
@@ -157,6 +158,7 @@ enum sampling_rate_e
   SAMPLING_RATE_8K = 0,
   SAMPLING_RATE_16K,
   SAMPLING_RATE_48K,
+  SAMPLING_RATE_192K,
   SAMPLING_RATE_NUM
 };
 
@@ -168,6 +170,13 @@ enum channel_type_e
   CHAN_TYPE_6CH,
   CHAN_TYPE_8CH,
   CHAN_TYPE_NUM
+};
+
+enum bitwidth_e
+{
+  BITWIDTH_16BIT = 0,
+  BITWIDTH_24BIT,
+  BITWIDTH_32BIT
 };
 
 enum microphone_device_e
@@ -244,7 +253,8 @@ static bool app_init_wav_header(void)
 {
   return s_container_format->init(FORMAT_ID_PCM,
                                  s_recorder_info.file.channel_number,
-                                 s_recorder_info.file.sampling_rate);
+                                 s_recorder_info.file.sampling_rate,
+                                 s_recorder_info.file.bitwidth);
 }
 
 static bool app_open_output_file(void)
@@ -361,7 +371,7 @@ static void app_write_output_file(uint32_t size)
     }
 
   ret = fwrite(s_recorder_info.fifo.write_buf, 1, size, s_recorder_info.file.fd);
-  if (ret < 0) {
+  if (ret <= 0) {
     printf("ERROR: Cannot write recorded data to output file.\n");
     app_close_output_file();
     return;
@@ -419,13 +429,13 @@ static bool printAudCmdResult(uint8_t command_code, AudioResult& result)
   return true;
 }
 
-static void app_attention_callback(uint8_t module_id,
-                                   uint8_t error_code,
-                                   uint8_t sub_code,
-                                   const char* file_name,
-                                   uint32_t line)
+static void app_attention_callback(const ErrorAttentionParam *attparam)
 {
-  printf("Attention!! %s L%d ecode %d subcode %d\n", file_name, line, error_code, sub_code);
+  printf("Attention!! %s L%d ecode %d subcode %d\n",
+          attparam->error_filename,
+          attparam->line_number,
+          attparam->error_code,
+          attparam->error_att_sub_code);
 }
 
 static bool app_create_audio_sub_system(void)
@@ -439,6 +449,7 @@ static bool app_create_audio_sub_system(void)
   ids.mng         = MSGQ_AUD_MGR;
   ids.player_main = 0xFF;
   ids.player_sub  = 0xFF;
+  ids.micfrontend = MSGQ_AUD_FRONTEND;
   ids.mixer       = 0xFF;
   ids.recorder    = MSGQ_AUD_RECORDER;
   ids.effector    = 0xFF;
@@ -446,22 +457,40 @@ static bool app_create_audio_sub_system(void)
 
   AS_CreateAudioManager(ids, app_attention_callback);
 
-  AsCreateRecorderParam_t recorder_create_param;
+  /* Create Frontend. */
+
+  AsCreateMicFrontendParams_t frontend_create_param;
+  frontend_create_param.msgq_id.micfrontend = MSGQ_AUD_FRONTEND;
+  frontend_create_param.msgq_id.mng         = MSGQ_AUD_MGR;
+  frontend_create_param.msgq_id.dsp         = MSGQ_AUD_PREDSP;
+  frontend_create_param.pool_id.input       = S0_INPUT_BUF_POOL;
+#ifdef CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC
+  frontend_create_param.pool_id.output      = S0_PREPROC_BUF_POOL;
+#else
+  frontend_create_param.pool_id.output      = S0_NULL_POOL;
+#endif
+  frontend_create_param.pool_id.dsp         = S0_PRE_APU_CMD_POOL;
+
+  AS_CreateMicFrontend(&frontend_create_param, NULL);
+
+  /* Create Recorder. */
+
+  AsCreateRecorderParams_t recorder_create_param;
   recorder_create_param.msgq_id.recorder      = MSGQ_AUD_RECORDER;
   recorder_create_param.msgq_id.mng           = MSGQ_AUD_MGR;
   recorder_create_param.msgq_id.dsp           = MSGQ_AUD_DSP;
-  recorder_create_param.pool_id.input         = INPUT_BUF_POOL;
-  recorder_create_param.pool_id.output        = ES_BUF_POOL;
-  recorder_create_param.pool_id.dsp           = ENC_APU_CMD_POOL;
+  recorder_create_param.pool_id.input         = S0_INPUT_BUF_POOL;
+  recorder_create_param.pool_id.output        = S0_ES_BUF_POOL;
+  recorder_create_param.pool_id.dsp           = S0_ENC_APU_CMD_POOL;
 
-  result = AS_CreateMediaRecorder(&recorder_create_param);
+  result = AS_CreateMediaRecorder(&recorder_create_param, NULL);
   if (!result)
     {
       printf("Error: AS_CreateMediaRecorder() failure. system memory insufficient!\n");
       return false;
     }
 
-  /* Create renderer feature. */
+  /* Create Capture feature. */
 
   AsCreateCaptureParam_t capture_create_param;
   capture_create_param.msgq_id.dev0_req  = MSGQ_AUD_CAP;
@@ -483,6 +512,7 @@ static void app_deact_audio_sub_system(void)
 {
   AS_DeleteAudioManager();
   AS_DeleteMediaRecorder();
+  AS_DeleteMicFrontend();
   AS_DeleteCapture();
 }
 
@@ -526,51 +556,20 @@ static bool app_set_ready(void)
   return printAudCmdResult(command.header.command_code, result);
 }
 
-static void app_set_mic_gain_analog(AudioCommand* command)
-{
-  command->header.packet_length = LENGTH_INITMICGAIN;
-  command->header.command_code  = AUDCMD_INITMICGAIN;
-  command->header.sub_code      = 0;
-  command->init_mic_gain_param.mic_gain[0] = 210;
-  command->init_mic_gain_param.mic_gain[1] = 210;
-  command->init_mic_gain_param.mic_gain[2] = 210;
-  command->init_mic_gain_param.mic_gain[3] = 210;
-  command->init_mic_gain_param.mic_gain[4] = AS_MICGAIN_HOLD;
-  command->init_mic_gain_param.mic_gain[5] = AS_MICGAIN_HOLD;
-  command->init_mic_gain_param.mic_gain[6] = AS_MICGAIN_HOLD;
-  command->init_mic_gain_param.mic_gain[7] = AS_MICGAIN_HOLD;
-}
-
-static void app_set_mic_gain_digital(AudioCommand* command)
-{
-  command->header.packet_length = LENGTH_INITMICGAIN;
-  command->header.command_code  = AUDCMD_INITMICGAIN;
-  command->header.sub_code      = 0;
-  command->init_mic_gain_param.mic_gain[0] = 0;
-  command->init_mic_gain_param.mic_gain[1] = 0;
-  command->init_mic_gain_param.mic_gain[2] = 0;
-  command->init_mic_gain_param.mic_gain[3] = 0;
-  command->init_mic_gain_param.mic_gain[4] = 0;
-  command->init_mic_gain_param.mic_gain[5] = 0;
-  command->init_mic_gain_param.mic_gain[6] = 0;
-  command->init_mic_gain_param.mic_gain[7] = 0;
-}
-
 static bool app_init_mic_gain(void)
 {
-
   AudioCommand command;
-  switch(USE_MICROPHONE)
-    {
-      case  MICROPHONE_ANALOG:
-        app_set_mic_gain_analog(&command);
-        break;
-      case MICROPHONE_DIGITAL:
-        app_set_mic_gain_digital(&command);
-        break;
-      default:
-        return false;
-    }
+  command.header.packet_length = LENGTH_INITMICGAIN;
+  command.header.command_code  = AUDCMD_INITMICGAIN;
+  command.header.sub_code      = 0;
+  command.init_mic_gain_param.mic_gain[0] = 0;
+  command.init_mic_gain_param.mic_gain[1] = 0;
+  command.init_mic_gain_param.mic_gain[2] = 0;
+  command.init_mic_gain_param.mic_gain[3] = 0;
+  command.init_mic_gain_param.mic_gain[4] = 0;
+  command.init_mic_gain_param.mic_gain[5] = 0;
+  command.init_mic_gain_param.mic_gain[6] = 0;
+  command.init_mic_gain_param.mic_gain[7] = 0;
   AS_SendAudioCommand(&command);
 
   AudioResult result;
@@ -580,7 +579,8 @@ static bool app_init_mic_gain(void)
 
 static bool app_set_recording_param(codec_type_e codec_type,
                                     sampling_rate_e sampling_rate,
-                                    channel_type_e ch_type)
+                                    channel_type_e ch_type,
+                                    bitwidth_e bitwidth)
 {
   switch(codec_type)
     {
@@ -609,6 +609,9 @@ static bool app_set_recording_param(codec_type_e codec_type,
       case SAMPLING_RATE_48K:
         s_recorder_info.file.sampling_rate = AS_SAMPLINGRATE_48000;
         break;
+      case SAMPLING_RATE_192K:
+        s_recorder_info.file.sampling_rate = AS_SAMPLINGRATE_192000;
+        break;
       default:
         printf("Error: Invalid sampling rate(%d)\n", sampling_rate);
         return false;
@@ -636,6 +639,22 @@ static bool app_set_recording_param(codec_type_e codec_type,
         return false;
     }
 
+  switch (bitwidth)
+    {
+      case BITWIDTH_16BIT:
+        s_recorder_info.file.bitwidth = AS_BITLENGTH_16;
+        break;
+      case BITWIDTH_24BIT:
+        s_recorder_info.file.bitwidth = AS_BITLENGTH_24;
+        break;
+      case BITWIDTH_32BIT:
+        s_recorder_info.file.bitwidth = AS_BITLENGTH_32;
+        break;
+      default:
+        printf("Error: Invalid bit width(%d)\n", bitwidth);
+        return false;
+    }
+
   return true;
 }
 
@@ -645,10 +664,33 @@ static bool app_set_recorder_status(void)
   command.header.packet_length = LENGTH_SET_RECORDER_STATUS;
   command.header.command_code  = AUDCMD_SETRECORDERSTATUS;
   command.header.sub_code      = 0x00;
-  command.set_recorder_status_param.input_device          = AS_SETRECDR_STS_INPUTDEVICE_MIC_A;
+  command.set_recorder_status_param.input_device          = AS_SETRECDR_STS_INPUTDEVICE_MIC;
   command.set_recorder_status_param.input_device_handler  = 0x00;
   command.set_recorder_status_param.output_device         = AS_SETRECDR_STS_OUTPUTDEVICE_RAM;
   command.set_recorder_status_param.output_device_handler = &s_recorder_info.fifo.output_device;
+  AS_SendAudioCommand(&command);
+
+  AudioResult result;
+  AS_ReceiveAudioResult(&result);
+  return printAudCmdResult(command.header.command_code, result);
+}
+
+static bool app_init_micfrontend(uint8_t preproc_type,
+                                 const char *dsp_name)
+{
+  AudioCommand command;
+  command.header.packet_length = LENGTH_INIT_MICFRONTEND;
+  command.header.command_code  = AUDCMD_INIT_MICFRONTEND;
+  command.header.sub_code      = 0x00;
+  command.init_micfrontend_param.ch_num       = s_recorder_info.file.channel_number;
+  command.init_micfrontend_param.bit_length   = s_recorder_info.file.bitwidth;
+  command.init_micfrontend_param.samples      = getCapSampleNumPerFrame(s_recorder_info.file.codec_type,
+                                                                        s_recorder_info.file.sampling_rate);
+  command.init_micfrontend_param.preproc_type = preproc_type;
+  snprintf(command.init_micfrontend_param.preprocess_dsp_path,
+           AS_PREPROCESS_FILE_PATH_LEN,
+           "%s", dsp_name);
+  command.init_micfrontend_param.data_dest = AsMicFrontendDataToRecorder;
   AS_SendAudioCommand(&command);
 
   AudioResult result;
@@ -679,11 +721,13 @@ static void app_init_recorder_opus(AudioCommand* command)
 
 static bool app_init_recorder(codec_type_e codec_type,
                               sampling_rate_e sampling_rate,
-                              channel_type_e ch_type)
+                              channel_type_e ch_type,
+                              bitwidth_e bitwidth)
 {
   if (!app_set_recording_param(codec_type,
                                sampling_rate,
-                               ch_type))
+                               ch_type,
+                               bitwidth))
     {
       printf("Error: app_set_recording_param() failure.\n");
       return false;
@@ -695,7 +739,7 @@ static bool app_init_recorder(codec_type_e codec_type,
   command.header.sub_code      = 0x00;
   command.recorder.init_param.sampling_rate  = s_recorder_info.file.sampling_rate;
   command.recorder.init_param.channel_number = s_recorder_info.file.channel_number;
-  command.recorder.init_param.bit_length     = AS_BITLENGTH_16;
+  command.recorder.init_param.bit_length     = s_recorder_info.file.bitwidth;
   snprintf(command.recorder.init_param.dsp_path, AS_AUDIO_DSP_PATH_LEN, "%s", DSPBIN_PATH);
 
   switch (s_recorder_info.file.codec_type)
@@ -779,6 +823,59 @@ static bool app_stop_recorder(void)
   return true;
 }
 
+#ifdef CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC
+static bool app_init_preproc_dsp(void)
+{
+  static InitParam s_initparam;
+
+  AudioCommand command;
+  command.header.packet_length = LENGTH_INIT_PREPROCESS_DSP;
+  command.header.command_code  = AUDCMD_INIT_PREPROCESS_DSP;
+  command.header.sub_code      = 0x00;
+  command.init_preproc_param.packet_addr = reinterpret_cast<uint8_t *>(&s_initparam);
+  command.init_preproc_param.packet_size = sizeof(s_initparam);
+  AS_SendAudioCommand(&command);
+
+  AudioResult result;
+  AS_ReceiveAudioResult(&result);
+  return printAudCmdResult(command.header.command_code, result);
+}
+
+static bool app_set_preproc_dsp(void)
+{
+  static SetParam s_setparam;
+
+  s_setparam.enable = true;
+  s_setparam.coef   = 99;
+
+  AudioCommand command;
+  command.header.packet_length = LENGTH_SET_PREPROCESS_DSP;
+  command.header.command_code  = AUDCMD_SET_PREPROCESS_DSP;
+  command.header.sub_code      = 0x00;
+  command.set_preproc_param.packet_addr = reinterpret_cast<uint8_t *>(&s_setparam);
+  command.set_preproc_param.packet_size = sizeof(s_setparam);
+  AS_SendAudioCommand(&command);
+
+  AudioResult result;
+  AS_ReceiveAudioResult(&result);
+  return printAudCmdResult(command.header.command_code, result);
+}
+#endif /* CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC */
+
+static bool app_set_clkmode(int clk_mode)
+{
+  AudioCommand command;
+  command.header.packet_length = LENGTH_SETRENDERINGCLK;
+  command.header.command_code  = AUDCMD_SETRENDERINGCLK;
+  command.header.sub_code      = 0x00;
+  command.set_renderingclk_param.clk_mode = clk_mode;
+  AS_SendAudioCommand(&command);
+
+  AudioResult result;
+  AS_ReceiveAudioResult(&result);
+  return printAudCmdResult(command.header.command_code, result);
+}
+
 static bool app_open_file_dir(void)
 {
   DIR *dirp;
@@ -857,7 +954,7 @@ static bool app_init_libraries(void)
       return false;
     }
 
-  err = Manager::initPerCpu(mml_data_area, NUM_MEM_POOLS);
+  err = Manager::initPerCpu(mml_data_area, static_pools, pool_num, layout_no);
   if (err != ERR_OK)
     {
       printf("Error: Manager::initPerCpu() failure. 0x%x\n", err);
@@ -866,15 +963,18 @@ static bool app_init_libraries(void)
 
   /* Create static memory pool of VoiceCall. */
 
+  const uint8_t sec_no = AUDIO_SECTION;
   const NumLayout layout_no = MEM_LAYOUT_RECORDER;
-  void* work_va = translatePoolAddrToVa(MEMMGR_WORK_AREA_ADDR);
-  err = Manager::createStaticPools(layout_no,
-                             work_va,
-                             MEMMGR_MAX_WORK_SIZE,
-                             MemoryPoolLayouts[layout_no]);
+  void* work_va = translatePoolAddrToVa(S0_MEMMGR_WORK_AREA_ADDR);
+  const PoolSectionAttr *ptr  = &MemoryPoolLayouts[AUDIO_SECTION][layout_no][0];
+  err = Manager::createStaticPools(sec_no,
+                                   layout_no,
+                                   work_va,
+                                   S0_MEMMGR_WORK_AREA_SIZE,
+                                   ptr);
   if (err != ERR_OK)
     {
-      printf("Error: Manager::initPerCpu() failure. %d\n", err);
+      printf("Error: Manager::createStaticPools() failure. %d\n", err);
       return false;
     }
 
@@ -895,7 +995,7 @@ static bool app_finalize_libraries(void)
 
   /* Destroy static pools. */
 
-  MemMgrLite::Manager::destroyStaticPools();
+  MemMgrLite::Manager::destroyStaticPools(AUDIO_SECTION);
 
   /* Finalize memory manager. */
 
@@ -949,15 +1049,13 @@ void app_recorde_process(uint32_t rec_time)
  * Public Functions
  ****************************************************************************/
 
-#ifdef CONFIG_BUILD_KERNEL
 extern "C" int main(int argc, FAR char *argv[])
-#else
-extern "C" int recorder_main(int argc, char *argv[])
-#endif
 {
   printf("Start AudioRecorder example\n");
 
-  
+  /* Set audio sampling rates. */
+  sampling_rate_e sampling_rate = SAMPLING_RATE_48K;
+
   /* First, initialize the shared memory and memory utility used by AudioSubSystem. */
 
   if (!app_init_libraries())
@@ -979,7 +1077,7 @@ extern "C" int recorder_main(int argc, char *argv[])
   if (!app_open_file_dir())
     {
       printf("Error: app_open_file_dir() failure.\n");
-      return 1;
+      goto ErrorReturn;
     }
   
    /* On and after this point, AudioSubSystem must be active.
@@ -991,7 +1089,7 @@ extern "C" int recorder_main(int argc, char *argv[])
   if (!app_power_on())
     {
       printf("Error: app_power_on() failure.\n");
-      return 1;
+      goto ErrorReturn;
     }
 
   /* Initialize simple fifo. */
@@ -1007,7 +1105,15 @@ extern "C" int recorder_main(int argc, char *argv[])
   if (!app_init_mic_gain())
     {
       printf("Error: app_init_mic_gain() failure.\n");
-      return 1;
+      goto ErrorReturn;
+    }
+
+  /* Set audio clock mode. */
+
+  if (!app_set_clkmode((sampling_rate == SAMPLING_RATE_192K) ? AS_CLKMODE_HIRES : AS_CLKMODE_NORMAL))
+    {
+      printf("Error: app_set_clkmode() failure.\n");
+      goto ErrorReturn;
     }
 
   /* Set recorder operation mode. */
@@ -1015,25 +1121,54 @@ extern "C" int recorder_main(int argc, char *argv[])
   if (!app_set_recorder_status())
     {
       printf("Error: app_set_recorder_status() failure.\n");
-      return 1;
+      goto ErrorReturn;
     }
 
   /* Initialize recorder. */
 
   if (!app_init_recorder(CODEC_TYPE_LPCM,
-                         SAMPLING_RATE_16K,
-                         CHAN_TYPE_MONO))
+                         sampling_rate,
+                         CHAN_TYPE_STEREO,
+                         BITWIDTH_16BIT))
     {
       printf("Error: app_init_recorder() failure.\n");
-      return 1;
+      goto ErrorReturn;
     }
+
+  /* Initialize MicFrontend. */
+
+  if (!app_init_micfrontend(
+#ifdef CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC
+                            AsMicFrontendPreProcUserCustom,
+#else /* CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC */
+                            AsMicFrontendPreProcThrough,
+#endif /* CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC */
+                            "/mnt/sd0/BIN/PREPROC"))
+    {
+      printf("Error: app_init_micfrontend() failure.\n");
+      goto ErrorReturn;
+    }
+
+#ifdef CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC
+  if (!app_init_preproc_dsp())
+    {
+      printf("Error: app_init_preproc_dsp() failure.\n");
+      goto ErrorReturn;
+    }
+
+  if (!app_set_preproc_dsp())
+    {
+      printf("Error: app_set_preproc_dsp() failure.\n");
+      goto ErrorReturn;
+    }
+#endif /* CONFIG_EXAMPLES_AUDIO_RECORDER_USEPREPROC */
 
   /* Start recorder operation. */
 
   if (!app_start_recorder())
     {
       printf("Error: app_start_recorder() failure.\n");
-      return 1;
+      goto ErrorReturn;
     }
 
   /* Running... */
@@ -1047,7 +1182,7 @@ extern "C" int recorder_main(int argc, char *argv[])
   if (!app_stop_recorder())
     {
       printf("Error: app_stop_recorder() failure.\n");
-      return 1;
+      goto ErrorReturn;
     }
 
   /* Close directory of recording file. */
@@ -1055,7 +1190,7 @@ extern "C" int recorder_main(int argc, char *argv[])
   if (!app_close_file_dir())
     {
       printf("Error: app_close_contents_dir() failure.\n");
-      return 1;
+      goto ErrorReturn;
     }
 
   /* Return the state of AudioSubSystem before voice_call operation. */
@@ -1063,7 +1198,7 @@ extern "C" int recorder_main(int argc, char *argv[])
   if (!app_set_ready())
     {
       printf("Error: app_set_ready() failure.\n");
-      return 1;
+      goto ErrorReturn;
     }
 
   /* Change AudioSubsystem to PowerOff state. */
@@ -1071,7 +1206,7 @@ extern "C" int recorder_main(int argc, char *argv[])
   if (!app_power_off())
     {
       printf("Error: app_power_off() failure.\n");
-      return 1;
+      goto ErrorReturn;
     }
 
   /* Deactivate the features used by AudioSubSystem. */
@@ -1085,8 +1220,26 @@ extern "C" int recorder_main(int argc, char *argv[])
       printf("Error: finalize_libraries() failure.\n");
       return 1;
     }
-
   printf("Exit AudioRecorder example\n");
 
   return 0;
+
+
+ErrorReturn:
+
+  /* Deactivate the features used by AudioSubSystem. */
+
+  app_deact_audio_sub_system();
+
+  /* finalize the shared memory and memory utility used by AudioSubSystem. */
+
+  if (!app_finalize_libraries())
+    {
+      printf("Error: finalize_libraries() failure.\n");
+      return 1;
+    }
+  printf("Exit AudioRecorder example\n");
+
+  return 1;
+
 }

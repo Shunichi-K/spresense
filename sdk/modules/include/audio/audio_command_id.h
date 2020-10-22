@@ -33,8 +33,8 @@
  *
  ****************************************************************************/
 
-#ifndef __SONY_APPS_INCLUDE_AUDIOUTIL_AUDIO_COMMAND_ID_H
-#define __SONY_APPS_INCLUDE_AUDIOUTIL_AUDIO_COMMAND_ID_H
+#ifndef __INCLUDE_AUDIO_AUDIO_COMMAND_ID_H
+#define __INCLUDE_AUDIO_AUDIO_COMMAND_ID_H
 
 /**
  * @defgroup audioutils Audio Utility
@@ -114,26 +114,50 @@
 /** @name Command Effector Function code */
 /** @{ */
 
-/*! brief Command Code: InitMFE */
+/*! \brief Command Code: Init Mic Frontend */
 
-#define  AUDCMD_INITMFE       (AUDCMD_CATEGORY_EFFECTOR | 0x01)
+#define  AUDCMD_INIT_MICFRONTEND (AUDCMD_CATEGORY_EFFECTOR | 0x01)
 
-/*! brief Command Code: InitMPP */
+/*! \brief Command Code: InitPreProcessDSP */
 
-#define  AUDCMD_INITMPP       (AUDCMD_CATEGORY_EFFECTOR | 0x02)
+#define  AUDCMD_INIT_PREPROCESS_DSP (AUDCMD_CATEGORY_EFFECTOR | 0x02)
 
-/*! brief Command Code: SetMPPParam (__not supported__) */
+/*! \brief Command Code: SetPreProcessDSP */
 
-#define  AUDCMD_SETMPPPARAM   (AUDCMD_CATEGORY_EFFECTOR | 0x03)
+#define  AUDCMD_SET_PREPROCESS_DSP  (AUDCMD_CATEGORY_EFFECTOR | 0x03)
+
+/*! \brief Command Code: Init OutputMiixer */
+
+#define  AUDCMD_INIT_OUTPUTMIXER (AUDCMD_CATEGORY_EFFECTOR | 0x04)
+
+/*! \brief Command Code: InitMPP */
+
+#define  AUDCMD_INITMPP       (AUDCMD_CATEGORY_EFFECTOR | 0x05)
+
+/*! \brief Command Code: SetMPPParam */
+
+#define  AUDCMD_SETMPPPARAM   (AUDCMD_CATEGORY_EFFECTOR | 0x06)
 
 /** @} */
 
 /** @name Effector Result code */
 /** @{ */
 
-/*! \brief Result Code: InitMFECmplt */
+/*! \brief Result Code: InitMicFrontendCmplt */
 
-#define  AUDRLT_INITMFECMPLT    AUDCMD_INITMFE
+#define  AUDRLT_INIT_MICFRONTEND  AUDCMD_INIT_MICFRONTEND
+
+/*! \brief Result Code: InitPreProcessDSPCmplt */
+
+#define  AUDRLT_INIT_PREPROCESS_DSP_CMPLT  AUDCMD_INIT_PREPROCESS_DSP
+
+/*! \brief Result Code: SetPreProcessDSPCmplt */
+
+#define  AUDRLT_SET_PREPROCESS_DSP_CMPLT   AUDCMD_SET_PREPROCESS_DSP
+
+/*! \brief Result Code: InitOutputMixerCmplt */
+
+#define  AUDRLT_INIT_OUTPUTMIXER_CMPLT  AUDCMD_INIT_OUTPUTMIXER
 
 /*! \brief Result Code: InitMPPCmplt */
 
@@ -197,6 +221,9 @@
 
 #define  AUDRLT_SETGAIN_CMPLT        AUDCMD_SETGAIN
 
+/*! \brief Result Code: SendPfCommandComplete */
+
+#define  AUDRLT_SENDPFCMD_CMPLT      AUDCMD_SENDPOSTCMD
 
 /** @} */
 
@@ -245,13 +272,25 @@
 /** @name Command Recognition Function code */
 /** @{ */
 
-/*! \brief Command Code: StartVoiceCommand */
+/*! \brief Command Code: StartRecognizer */
 
-#define AUDCMD_STARTVOICECOMMAND  (AUDCMD_CATEGORY_RECOGNITION | 0x01)
+#define AUDCMD_START_RECOGNIZER  (AUDCMD_CATEGORY_RECOGNITION | 0x01)
 
-/*! \brief Command Code: StopVoiceCommand */
+/*! \brief Command Code: StopRecognizer */
 
-#define AUDCMD_STOPVOICECOMMAND   (AUDCMD_CATEGORY_RECOGNITION | 0x02)
+#define AUDCMD_STOP_RECOGNIZER   (AUDCMD_CATEGORY_RECOGNITION | 0x02)
+
+/*! \brief command Code: InitRecognizer */
+
+#define AUDCMD_INIT_RECOGNIZER   (AUDCMD_CATEGORY_RECOGNITION | 0x03)
+
+/*! \brief command Code: InitRecognitionProcessDSP */
+
+#define AUDCMD_INIT_RECOGNIZER_DSP (AUDCMD_CATEGORY_RECOGNITION | 0x04)
+
+/*! \brief command Code: SetRecognitionProcessDSP */
+
+#define AUDCMD_SET_RECOGNIZER_DSP  (AUDCMD_CATEGORY_RECOGNITION | 0x05)
 
 /** @} */
 
@@ -260,13 +299,25 @@
 /** @name Result code */
 /** @{ */
 
-/*! \brief Result Code: StartVoiceCommandCmplt */
+/*! \brief Result Code: StartRecognizerCmplt */
 
-#define  AUDRLT_STARTVOICECOMMANDCMPLT  AUDCMD_STARTVOICECOMMAND
+#define  AUDRLT_START_RECOGNIZER_CMPLT  AUDCMD_START_RECOGNIZER
 
-/*! \brief Result Code: StopVoiceCommandCmplt */
+/*! \brief Result Code: StopRecognizerCmplt */
 
-#define  AUDRLT_STOPVOICECOMMANDCMPLT   AUDCMD_STOPVOICECOMMAND
+#define  AUDRLT_STOP_RECOGNIZER_CMPLT   AUDCMD_STOP_RECOGNIZER
+
+/*! \brief Result Code: InitRecognizerCmplt */
+
+#define  AUDRLT_INIT_RECOGNIZER_CMPLT   AUDCMD_INIT_RECOGNIZER
+
+/*! \brief command Code: InitRecognitionProcessDSPCmplt */
+
+#define  AUDRLT_INIT_RECOGNIZER_DSP_CMPLT AUDCMD_INIT_RECOGNIZER_DSP
+
+/*! \brief command Code: SetRecognitionProcessDSPCmplt */
+
+#define  AUDRLT_SET_RECOGNIZER_DSP_CMPLT  AUDCMD_SET_RECOGNIZER_DSP
 
 /** @} */
 
@@ -277,11 +328,15 @@
 /** @name Command Baseband Function code */
 /** @{ */
 
-/*! brief Command Code: StartBB */
+/*! \brief Command Code: StartBB
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDCMD_STARTBB          (AUDCMD_CATEGORY_BASEBAND | 0x01)
 
-/*! brief Command Code: StopBB */
+/*! \brief Command Code: StopBB
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDCMD_STOPBB           (AUDCMD_CATEGORY_BASEBAND | 0x02)
 
@@ -289,11 +344,15 @@
 
 #define AUDCMD_INITMICGAIN      (AUDCMD_CATEGORY_BASEBAND | 0x03)
 
-/*! \brief Command Code: InitI2SParam */
+/*! \brief Command Code: InitI2SParam
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDCMD_INITI2SPARAM     (AUDCMD_CATEGORY_BASEBAND | 0x04)
 
-/*! \brief Command Code: InitDEQParam (__not supported__) */
+/*! \brief Command Code: InitDEQParam
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDCMD_INITDEQPARAM     (AUDCMD_CATEGORY_BASEBAND | 0x05)
 
@@ -301,11 +360,15 @@
 
 #define AUDCMD_INITOUTPUTSELECT (AUDCMD_CATEGORY_BASEBAND | 0x06)
 
-/*! \brief Command Code: InitDNCParam (__not supported__) */
+/*! \brief Command Code: InitDNCParam
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDCMD_INITDNCPARAM     (AUDCMD_CATEGORY_BASEBAND | 0x07)
 
-/*! \brief Command Code: InitClearStereo */
+/*! \brief Command Code: InitClearStereo
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDCMD_INITCLEARSTEREO  (AUDCMD_CATEGORY_BASEBAND | 0x08)
 
@@ -325,16 +388,28 @@
 
 #define AUDCMD_SETRENDERINGCLK  (AUDCMD_CATEGORY_BASEBAND | 0x0c)
 
+/*! \brief Command Code: SetSpDrvMode */
+
+#define AUDCMD_SETSPDRVMODE     (AUDCMD_CATEGORY_BASEBAND | 0x0d)
+
+/*! \brief Command Code: SetMicMap */
+
+#define AUDCMD_SETMICMAP        (AUDCMD_CATEGORY_BASEBAND | 0x0e)
+
 /** @} */
 
 /** @name Baseband Result code */
 /** @{ */
 
-/*! \brief Result Code: StartBBCmplt */
+/*! \brief Result Code: StartBBCmplt
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDRLT_STARTBBCMPLT             AUDCMD_STARTBB
 
-/*! \brief Result Code: StopBBCmplt */
+/*! \brief Result Code: StopBBCmplt
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDRLT_STOPBBCMPLT              AUDCMD_STOPBB
 
@@ -342,11 +417,19 @@
 
 #define AUDRLT_INITMICGAINCMPLT         AUDCMD_INITMICGAIN
 
-/*! \brief Result Code: InitI2SCmplt */
+/*! \brief Result Code: InitMicGainCmplt */
+
+#define AUDRLT_SETMICMAPCMPLT           AUDCMD_SETMICMAP
+
+/*! \brief Result Code: InitI2SCmplt
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDRLT_INITI2SPARAMCMPLT        AUDCMD_INITI2SPARAM
 
-/*! \brief Result Code: InitDEQCmplt */
+/*! \brief Result Code: InitDEQCmplt
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDRLT_INITDEQPARAMCMPLT        AUDCMD_INITDEQPARAM
 
@@ -354,11 +437,15 @@
 
 #define AUDRLT_INITOUTPUTSELECTCMPLT    AUDCMD_INITOUTPUTSELECT
 
-/*! \brief Result Code: InitDNCCmplt */
+/*! \brief Result Code: InitDNCCmplt
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDRLT_INITDNCPARAMCMPLT        AUDCMD_INITDNCPARAM
 
-/*! \brief Result Code: InitClearStereoCmplt */
+/*! \brief Result Code: InitClearStereoCmplt
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDRLT_INITCLEARSTEREOCMPLT     AUDCMD_INITCLEARSTEREO
 
@@ -377,6 +464,10 @@
 /*! \brief Result Code: SetRenderingClkCmplt */
 
 #define AUDRLT_SETRENDERINGCLKCMPLT     AUDCMD_SETRENDERINGCLK
+
+/*! \brief Result Code: SetSpDrvModeCmplt */
+
+#define AUDRLT_SETSPDRVMODECMPLT        AUDCMD_SETSPDRVMODE
 
 /** @} */
 
@@ -417,7 +508,9 @@
 
 #define AUDCMD_SETPOWEROFFSTATUS    (AUDCMD_CATEGORY_TRANSITION | 0x02)
 
-/*! \brief Command Code: SetBaseBandStatus */
+/*! \brief Command Code: SetBaseBandStatus
+ *  \deprecated It will be removed in the future
+ */
 
 #define AUDCMD_SETBASEBANDSTATUS    (AUDCMD_CATEGORY_TRANSITION | 0x03)
 
@@ -433,9 +526,17 @@
 
 #define AUDCMD_SETREADYSTATUS       (AUDCMD_CATEGORY_TRANSITION | 0x06)
 
-/*! \brief Command Code: SetReadyStartus */
+/*! \brief Command Code: SetThroughStartus */
 
 #define AUDCMD_SETTHROUGHSTATUS     (AUDCMD_CATEGORY_TRANSITION | 0x07)
+
+/*! \brief Command Code: SetPlayerStatus */
+
+#define AUDCMD_SETPLAYERSTATUSPOST  (AUDCMD_CATEGORY_TRANSITION | 0x08)
+
+/*! \brief Command Code: SetRecognizerStatus */
+
+#define AUDCMD_SETRECOGNIZERSTATUS  (AUDCMD_CATEGORY_TRANSITION | 0x09)
 
 /** @} */
 
@@ -465,7 +566,7 @@
 
 /** @} */
 
-#endif /* __SONY_APPS_INCLUDE_AUDIOUTIL_AUDIO_HIGH_LEVEL_API_H */
+#endif /* __INCLUDE_AUDIO_AUDIO_COMMAND_ID_H */
 
 /**
  * @}

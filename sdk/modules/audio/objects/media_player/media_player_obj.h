@@ -47,7 +47,7 @@
 #include "memutils/memory_manager/MemHandle.h"
 #include "wien2_common_defs.h"
 #include "audio_state.h"
-#include "common/audio_internal_message_types.h"
+#include "audio/audio_message_types.h"
 #include "player_input_device_handler.h"
 #include "wien2_internal_packet.h"
 
@@ -57,6 +57,11 @@ __WIEN2_BEGIN_NAMESPACE
  * Pre-processor Definitions
  ****************************************************************************/
 
+#define MEDIA_PLAYER_FATAL(code) MEDIA_PLAYERS_FATAL(m_player_id, code)
+#define MEDIA_PLAYER_ERR(code) MEDIA_PLAYERS_ERR(m_player_id, code)
+#define MEDIA_PLAYER_WARN(code) MEDIA_PLAYERS_WARN(m_player_id, code)
+#define MEDIA_PLAYER_INF(code) MEDIA_PLAYERS_INF(m_player_id, code)
+
 /****************************************************************************
  * Public Types
  ****************************************************************************/
@@ -65,35 +70,28 @@ class PlayerObj
 {
 public:
   static void create(void **obj,
-                     MsgQueId self_dtq,
-                     MsgQueId apu_dtq,
-                     MemMgrLite::PoolId es_pool_id,
-                     MemMgrLite::PoolId pcm_pool_id,
-                     MemMgrLite::PoolId apu_pool_id);
+                     AsPlayerMsgQueId_t msgq_id,
+                     AsPlayerPoolId_t pool_id,
+                     AsPlayerId player_id);
 
   MsgQueId get_selfId()
     {
-      return m_self_dtq;
+      return m_msgq_id.player;
     }
   MsgQueId get_apuId()
     {
-      return m_apu_dtq;
+      return m_msgq_id.dsp;
+    }
+  AsPlayerId get_playerId()
+    {
+      return m_player_id;
     }
 
 private:
-  PlayerObj(MsgQueId self_dtq,
-            MsgQueId apu_dtq,
-            MemMgrLite::PoolId es_pool_id,
-            MemMgrLite::PoolId pcm_pool_id,
-            MemMgrLite::PoolId apu_pool_id);
+  PlayerObj(AsPlayerMsgQueId_t msgq_id, AsPlayerPoolId_t pool_id, AsPlayerId player_id);
 
-  MsgQueId m_self_dtq;
-  MsgQueId m_apu_dtq;
-
-  MemMgrLite::PoolId m_es_pool_id;
-  MemMgrLite::PoolId m_pcm_pool_id;
-  MemMgrLite::PoolId m_apu_pool_id;
-
+  AsPlayerMsgQueId_t m_msgq_id;
+  AsPlayerPoolId_t   m_pool_id;
 
   enum PlayerState
   {
@@ -121,16 +119,19 @@ private:
   AudioState<PlayerState>    m_state;
   AudioState<PlayerSubState> m_sub_state;
 
+  AsPlayerId                m_player_id;
   PlayerInputDeviceHandler *m_input_device_handler;
   InputHandlerOfRAM         m_in_ram_device_handler;
   void*                     m_p_dec_instance;
 
   uint32_t  m_max_es_buff_size;
   uint32_t  m_max_pcm_buff_size;
+  uint32_t  m_max_src_work_buff_size;
   AudioCodec  m_codec_type;
 
-  #define  MAX_EXEC_COUNT    4  /* Number of audio frames to be prior introduced. */
-  #define  MAX_OUT_BUFF_NUM  9  /* Number of PCM buffer. */
+  #define  MAX_EXEC_COUNT    2   /* Number of audio frames to be prior introduced. */
+  #define  MAX_OUT_BUFF_NUM  10  /* Number of PCM buffer. */
+  #define  MAX_SRC_WORK_BUFF_NUM 1 /* Number of SRC work buffer. */
 
   typedef s_std::Queue<MemMgrLite::MemHandle, MAX_EXEC_COUNT + 1> EsMhQueue;
   EsMhQueue m_es_buf_mh_que;
@@ -140,6 +141,10 @@ private:
 
   typedef s_std::Queue<AsPcmDataParam, MAX_OUT_BUFF_NUM + 1> DecodecPcmMhQueue;
   DecodecPcmMhQueue m_decoded_pcm_mh_que;
+
+  typedef s_std::Queue<MemMgrLite::MemHandle, MAX_SRC_WORK_BUFF_NUM> SrcWorkMhQueue;
+  SrcWorkMhQueue m_src_work_buf_mh_que;
+  void *m_src_work_buf;
 
   s_std::Queue<AsPlayerEvent, 1> m_external_cmd_que;
 
@@ -158,6 +163,7 @@ private:
   static MsgProc PlayerResultTbl[AUD_PLY_RST_MSG_NUM][PlayerStateNum];
   static MsgProc PlayerResultSubTbl[AUD_PLY_RST_MSG_NUM][SubStateNum];
 
+  void reply(AsPlayerEvent evtype, MsgType msg_type, uint32_t result);
   void illegalEvt(MsgPacket *);
 
   void activate(MsgPacket *);
@@ -194,7 +200,9 @@ private:
 
   void setGain(MsgPacket *);
 
-  uint32_t loadCodec(AudioCodec codec, char *path, uint32_t* dsp_inf);
+  uint32_t loadCodec(AudioCodec codec,
+                     AsInitPlayerParam *param,
+                     uint32_t* dsp_inf);
   uint32_t unloadCodec();
 
   uint32_t startPlay(uint32_t* dsp_inf);
@@ -225,8 +233,27 @@ private:
       return true;
     }
 
+  void *allocSrcWorkBuf(uint32_t size);
+  bool  freeSrcWorkBuf()
+    {
+      if (m_src_work_buf == NULL)
+        {
+          if (!m_src_work_buf_mh_que.pop())
+            {
+              MEDIA_PLAYER_ERR(AS_ATTENTION_SUB_CODE_MEMHANDLE_FREE_ERROR);
+              return false;
+            }
+        }
+      else
+        {
+          kmm_free(m_src_work_buf);
+        }
+      return true;
+    }
+
   void finalize();
   bool checkAndSetMemPool();
+  bool judgeMultiCore(uint32_t sampling_rate, uint8_t bit_length);
 };
 
 /****************************************************************************

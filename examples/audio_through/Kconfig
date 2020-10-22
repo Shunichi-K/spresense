@@ -4,7 +4,7 @@
 #
 
 config EXAMPLES_AUDIO_THROUGH
-	bool "Audio through example"
+	tristate "Audio through example"
 	default n
 	depends on CXD56_AUDIO
 	---help---
@@ -12,15 +12,15 @@ config EXAMPLES_AUDIO_THROUGH
 
 if EXAMPLES_AUDIO_THROUGH
 
-config EXAMPLES_AUDIO_PLAYER_PROGNAME
+config EXAMPLES_AUDIO_THROUGH_PROGNAME
 	string "Program name"
 	default "audio_through"
 
-config EXAMPLES_AUDIO_PLAYER_PRIORITY
+config EXAMPLES_AUDIO_THROUGH_PRIORITY
 	int "Audio through task priority"
 	default 150
 
-config EXAMPLES_AUDIO_PLAYER_STACKSIZE
+config EXAMPLES_AUDIO_THROUGH_STACKSIZE
 	int "Audio through stack size"
 	default 2048
 

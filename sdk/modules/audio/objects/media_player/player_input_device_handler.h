@@ -40,7 +40,6 @@
  * Included Files
  ****************************************************************************/
 
-#include <arch/chip/cxd56_audio.h>
 #include "audio/audio_high_level_api.h"
 #include "memutils/common_utils/common_assert.h"
 #include "objects/stream_parser/input_data_mng_obj.h"
@@ -145,7 +144,6 @@ public:
 protected:
   uint32_t    m_es_sampling_rate;
   AudioCodec  m_codec_type;
-  cxd56_audio_clkmode_t m_clock_mode;
   uint16_t    m_cur_wav_au_sample_num;
   uint8_t     m_ch_num;
   uint8_t     m_init_player_api_codec_type;

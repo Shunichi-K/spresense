@@ -41,6 +41,7 @@
 #include "memutils/s_stl/queue.h"
 #include "memutils/s_stl/s_stl_config.h"
 #include "dma_controller/level_ctrl.h"
+#include "audio_state.h"
 #include <debug.h>
 
 __USING_S_STL;
@@ -77,8 +78,16 @@ E_AS AS_DeactivateDmac(cxd56_audio_dma_t dmacId);
 # define UNDERFLOW_INSERT_SAMPLE 1024  /* 21ms */
 #endif  /* CONFIG_AUDIOUTILS_RENDERER_UNDERFLOW */
 
-#define READY_QUEUE_NUM 16
-#define RUNNING_QUEUE_NUM 3
+/* Definition of size of DMA ReadyQueue.
+ * The number of queues is a value obtained by multiplying
+ * the maximum number of segments by the number of forwarding of DMA.
+ * Assume that the number of Segment is 10 maximum.
+ * The maximum number of DMA transfers in 1 segment is 3.
+ * (192000/882000 * 1024sample / 1024(DMA MAX) = 2.17)
+ */
+
+#define READY_QUEUE_NUM 30
+#define RUNNING_QUEUE_NUM 2
 #define PREPARE_SAVE_NUM RUNNING_QUEUE_NUM
 
 typedef bool (* AS_DmaDrvFunc)(void*);
@@ -101,7 +110,7 @@ public:
 
   AsDmaDrv(cxd56_audio_dma_t dmac_id)
       : m_dmac_id(dmac_id)
-      , m_state(AS_DMA_STATE_BOOTED)
+      , m_state(AS_MODULE_ID_AUDIO_DRIVER, "", AS_DMA_STATE_BOOTED)
       , m_error_func(dma_err_callback)
       , m_dma_buf_cnt(0)
       , m_min_size(0)
@@ -133,7 +142,7 @@ private:
 
   cxd56_audio_dma_t m_dmac_id;
 
-  asDmaState  m_state;
+  AudioState<asDmaState>  m_state;
 
   AS_ErrorCb   m_error_func;
   AS_DmaDoneCb m_dmadone_func;
@@ -177,6 +186,8 @@ private:
   void dmaCmplt(void);
   bool dmaCmpltOnRun(void*);
   bool dmaCmpltOnFlush(void*);
+  bool dmaCmpltOnError(void*);
+  bool illegalDmaCmplt(void*);
   bool dmaErrInt(void*);
   bool dmaErrIntOnRun(void*);
   bool dmaErrBus(void*);
@@ -190,6 +201,8 @@ private:
   void fadeControl(void);
   void volumeCtrl(bool validity, bool is_last_frame);
   bool pushRequest(void*, bool);
+  bool ignore(void*);
+
 
   static void dma_err_callback(AudioDrvDmaError *pParam)
   {

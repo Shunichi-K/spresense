@@ -33,79 +33,18 @@
  *
  ****************************************************************************/
 
+/****************************************************************************
+ * !! Caution !!
+ *
+ * Don't include this file.
+ * This file will be deleted after SDK 1.3.0.
+ *
+ * Please include "#include <audio/utilities/wav_containerformat.h>".
+ ****************************************************************************/
+
 #ifndef MODULES_AUDIO_CONTAINER_FORMAT_LIB_WAV_CONTAINERFORMAT_H
 #define MODULES_AUDIO_CONTAINER_FORMAT_LIB_WAV_CONTAINERFORMAT_H
 
-/* Channel number */
-
-#define CHANNEL_1CH  1  /* MONO   */
-#define CHANNEL_2CH  2  /* STEREO */
-#define CHANNEL_4CH  4
-#define CHANNEL_6CH  6
-#define CHANNEL_8CH  8
-
-/* Sampling rate */
-
-#define SAMPLINGRATE_8000   8000   /* 8kHz      */
-#define SAMPLINGRATE_11025  11025  /* 11.025kHz */
-#define SAMPLINGRATE_12000  12000  /* 12kHz     */
-#define SAMPLINGRATE_16000  16000  /* 16kHz     */
-#define SAMPLINGRATE_22050  22050  /* 2205kHz   */
-#define SAMPLINGRATE_24000  24000  /* 24kHz     */
-#define SAMPLINGRATE_32000  32000  /* 32kHz     */
-#define SAMPLINGRATE_44100  44100  /* 44.1kHz   */
-#define SAMPLINGRATE_48000  48000  /* 48kHz     */
-
-/* Format ID */
-
-#define FORMAT_ID_PCM   0x0001  /* Linear PCM */
-
-/* For wave header. */
-
-#define CHUNKID_RIFF      "RIFF"
-#define FORMAT_WAVE       "WAVE"
-#define SUBCHUNKID_FMT    "fmt "
-#define SUBCHUNKID_DATA   "data"
-#define FMT_SIZE          0x10
-
-struct wav_header_s
-{
-  uint8_t  riff[4];    /* "RIFF"             */
-  uint32_t total_size;
-  uint8_t  wave[4];    /* "WAVE"             */
-  uint8_t  fmt[4];     /* "fmt "             */
-  uint32_t fmt_size;   /* fmt chunk size     */
-  uint16_t format;     /* format type        */
-  uint16_t channel;    /* channel number     */
-  uint32_t rate;       /* sampling rate      */
-  uint32_t avgbyte;    /* rate * block       */
-  uint16_t block;      /* channels * bit / 8 */
-  uint16_t bit;        /* bit length         */
-  uint8_t  data[4];    /* "data"             */
-  uint32_t data_size;
-};
-typedef struct wav_header_s WAVHEADER;
-
-class WavContainerFormat
-{
-public:
-  WavContainerFormat() :
-    m_format_id(0),
-    m_channel_number(0),
-    m_sampling_rate(0)
-    {}
-  ~WavContainerFormat() {}
-
-  bool init(uint16_t  format_id,
-            uint16_t  channel_number,
-            uint32_t  sampling_rate);
-
-  bool getHeader(WAVHEADER *wav_header,
-           uint32_t data_size);
-private:
-  uint16_t  m_format_id;
-  uint16_t  m_channel_number;
-  uint32_t  m_sampling_rate;
-};
+#include <audio/utilities/wav_containerformat.h>
 
 #endif /* MODULES_AUDIO_CONTAINER_FORMAT_LIB_WAV_CONTAINERFORMAT_H */
